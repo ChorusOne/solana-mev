@@ -44,6 +44,7 @@ pub mod inline_spl_token;
 pub mod inline_spl_token_2022;
 pub mod loader_utils;
 pub mod message_processor;
+mod mev;
 pub mod non_circulating_supply;
 mod nonce_keyed_account;
 pub mod prioritization_fee;
