@@ -834,6 +834,7 @@ impl PartialEq for Bank {
             accounts_data_size_initial: _,
             accounts_data_size_delta_on_chain: _,
             accounts_data_size_delta_off_chain: _,
+            mev: _,
             fee_structure: _,
             incremental_snapshot_persistence: _,
             // Ignore new fields explicitly if they do not impact PartialEq.
@@ -1086,6 +1087,8 @@ pub struct Bank {
     /// The change to accounts data size in this Bank, due to off-chain events (i.e. rent collection)
     accounts_data_size_delta_off_chain: AtomicI64,
 
+    pub mev: RwLock<crate::mev::MEV>,
+
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
 
@@ -1278,6 +1281,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1604,6 +1608,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
+            mev: RwLock::new(crate::mev::MEV::new(parent.mev.read().unwrap().log_path)),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1947,6 +1952,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
         };
         bank.finish_init(
             genesis_config,
@@ -4383,7 +4389,12 @@ impl Bank {
                         compute_budget
                     };
 
-                    self.execute_loaded_transaction(
+                    // Get MEV instance, we need write access to log things.
+                    let mut mev = self.mev.write().unwrap();
+                    // Upon executing transaction `tx`, do we have a follow up transaction?
+                    let maybe_mev_transaction = mev.get_mev_transaction(tx, loaded_transaction);
+
+                    let tx_result = self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
                         compute_budget,
@@ -4394,7 +4405,9 @@ impl Bank {
                         timings,
                         &mut error_counters,
                         log_messages_bytes_limit,
-                    )
+                    );
+                    tx_result
+                    // TODO: Execute the `maybe_mev_transaction` after executing `tx`.
                 }
             })
             .collect();
