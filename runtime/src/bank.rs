@@ -1247,6 +1247,8 @@ pub struct Bank {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
+
+    pub mev: RwLock<crate::mev::MEV>,
 }
 
 impl Default for BlockhashQueue {
@@ -1397,6 +1399,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1732,6 +1735,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
+            mev: RwLock::new(crate::mev::MEV::new(parent.mev.read().unwrap().log_path)),
         };
 
         let (_, ancestors_time) = Measure::this(
@@ -2043,6 +2047,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
+            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
         };
         bank.finish_init(
             genesis_config,
@@ -4196,7 +4201,12 @@ impl Bank {
                         compute_budget
                     };
 
-                    self.execute_loaded_transaction(
+                    // Get MEV instance, we need write access to log things.
+                    let mut mev = self.mev.write().unwrap();
+                    // Upon executing transaction `tx`, do we have a follow up transaction?
+                    let maybe_mev_transaction = mev.get_mev_transaction(tx, loaded_transaction);
+
+                    let tx_result = self.execute_loaded_transaction(
                         tx,
                         loaded_transaction,
                         compute_budget,
@@ -4205,7 +4215,9 @@ impl Bank {
                         enable_log_recording,
                         timings,
                         &mut error_counters,
-                    )
+                    );
+                    tx_result
+                    // TODO: Execute the `maybe_mev_transaction` after executing `tx`.
                 }
             })
             .collect();
