@@ -27,6 +27,7 @@ impl MEV {
         loaded_transaction: &mut LoadedTransaction,
     ) -> Option<(SanitizedTransaction, LoadedTransaction)> {
         writeln!(&mut self.file, "Observed MEV opportunity :-)").unwrap();
-        unimplemented!()
+        // Change to return something once we exploit arbitrage opportunities.
+        None
     }
 }
