@@ -25,7 +25,8 @@ impl MEV {
         &mut self,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
-    ) {
+    ) -> Option<(SanitizedTransaction, LoadedTransaction)> {
         writeln!(&mut self.file, "Observed MEV opportunity :-)").unwrap();
+        unimplemented!()
     }
 }

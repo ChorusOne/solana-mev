@@ -4347,12 +4347,12 @@ impl Bank {
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
-
-        let execution_results: Vec<TransactionExecutionResult> = loaded_transactions
-            .iter_mut()
-            .zip(sanitized_txs.iter())
-            .map(|(accs, tx)| match accs {
-                (Err(e), _nonce) => TransactionExecutionResult::NotExecuted(e.clone()),
+        let mut execution_results = Vec::new();
+        for (accs, tx) in loaded_transactions.iter_mut().zip(sanitized_txs.iter()) {
+            match accs {
+                (Err(e), _nonce) => {
+                    execution_results.push(TransactionExecutionResult::NotExecuted(e.clone()))
+                }
                 (Ok(loaded_transaction), nonce) => {
                     let mut feature_set_clone_time = Measure::start("feature_set_clone");
                     let feature_set = self.feature_set.clone();
@@ -4384,7 +4384,9 @@ impl Bank {
                             compute_budget_process_transaction_time.as_us()
                         );
                         if let Err(err) = process_transaction_result {
-                            return TransactionExecutionResult::NotExecuted(err);
+                            execution_results
+                                .push(TransactionExecutionResult::NotExecuted(err));
+                            continue;
                         }
                         compute_budget
                     };
@@ -4406,12 +4408,24 @@ impl Bank {
                         &mut error_counters,
                         log_messages_bytes_limit,
                     );
-                    tx_result
-                    // TODO: Execute the `maybe_mev_transaction` after executing `tx`.
+                    if let Some((tx, mut loaded_transaction)) = maybe_mev_transaction {
+                        execution_results.push(self.execute_loaded_transaction(
+                            &tx,
+                            &mut loaded_transaction,
+                            compute_budget,
+                            nonce.as_ref().map(DurableNonceFee::from),
+                            enable_cpi_recording,
+                            enable_log_recording,
+                            enable_return_data_recording,
+                            timings,
+                            &mut error_counters,
+                            log_messages_bytes_limit,
+                        ));
+                    }
+                    execution_results.push(tx_result);
                 }
-            })
-            .collect();
-
+            }
+        }
         execution_time.stop();
 
         debug!(
