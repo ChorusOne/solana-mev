@@ -4408,6 +4408,7 @@ impl Bank {
                         &mut error_counters,
                         log_messages_bytes_limit,
                     );
+                    execution_results.push(tx_result);
                     if let Some((tx, mut loaded_transaction)) = maybe_mev_transaction {
                         execution_results.push(self.execute_loaded_transaction(
                             &tx,
@@ -4422,7 +4423,6 @@ impl Bank {
                             log_messages_bytes_limit,
                         ));
                     }
-                    execution_results.push(tx_result);
                 }
             }
         }
