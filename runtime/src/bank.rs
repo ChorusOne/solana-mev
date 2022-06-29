@@ -1248,7 +1248,7 @@ pub struct Bank {
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
 
-    pub mev: RwLock<crate::mev::MEV>,
+    pub mev: RwLock<crate::mev::Mev>,
 }
 
 impl Default for BlockhashQueue {
@@ -1399,7 +1399,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
+            mev: RwLock::new(crate::mev::Mev::new("/tmp/mev_log.txt")),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1735,7 +1735,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            mev: RwLock::new(crate::mev::MEV::new(parent.mev.read().unwrap().log_path)),
+            mev: RwLock::new(crate::mev::Mev::new(parent.mev.read().unwrap().log_path)),
         };
 
         let (_, ancestors_time) = Measure::this(
@@ -2047,7 +2047,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
+            mev: RwLock::new(crate::mev::Mev::new("/tmp/mev_log.txt")),
         };
         bank.finish_init(
             genesis_config,
