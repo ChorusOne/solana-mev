@@ -1087,7 +1087,7 @@ pub struct Bank {
     /// The change to accounts data size in this Bank, due to off-chain events (i.e. rent collection)
     accounts_data_size_delta_off_chain: AtomicI64,
 
-    pub mev: RwLock<crate::mev::MEV>,
+    pub mev: RwLock<crate::mev::Mev>,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
@@ -1281,7 +1281,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
+            mev: RwLock::new(crate::mev::Mev::new("/tmp/mev_log.txt")),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1608,7 +1608,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            mev: RwLock::new(crate::mev::MEV::new(parent.mev.read().unwrap().log_path)),
+            mev: RwLock::new(crate::mev::Mev::new(parent.mev.read().unwrap().log_path)),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1952,7 +1952,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: RwLock::new(crate::mev::MEV::new("/tmp/mev_log.txt")),
+            mev: RwLock::new(crate::mev::Mev::new("/tmp/mev_log.txt")),
         };
         bank.finish_init(
             genesis_config,

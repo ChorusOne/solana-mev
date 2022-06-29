@@ -6,12 +6,12 @@ use solana_sdk::transaction::SanitizedTransaction;
 use crate::accounts::LoadedTransaction;
 
 #[derive(Debug)]
-pub struct MEV {
+pub struct Mev {
     pub log_path: &'static str,
     file: File,
 }
 
-impl MEV {
+impl Mev {
     pub fn new(log_path: &'static str) -> Self {
         let file = fs::OpenOptions::new()
             .create(true)
@@ -19,7 +19,7 @@ impl MEV {
             .append(true)
             .open(log_path)
             .expect("Failed while creating/opening MEV log file");
-        MEV { log_path, file }
+        Mev { log_path, file }
     }
     pub fn get_mev_transaction(
         &mut self,
