@@ -1820,6 +1820,14 @@ pub fn main() {
                 .hidden(true),
         )
         .arg(
+            Arg::with_name("mev_log_path")
+                .long("mev-log-path")
+                .takes_value(true)
+                .value_name("FILE")
+                .default_value("/tmp/mev_log.txt")
+                .help("Fully qualified path for MEV logging")
+        )
+        .arg(
             Arg::with_name("log_messages_bytes_limit")
                 .long("log-messages-bytes-limit")
                 .takes_value(true)
@@ -2592,6 +2600,8 @@ pub fn main() {
         warn!("`--accounts-db-skip-shrink` is deprecated. please consider removing it from the validator command line argument list");
     }
 
+    let mev_log_path = PathBuf::from(matches.value_of("mev_log_path").unwrap_or_default());
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2672,6 +2682,7 @@ pub fn main() {
         no_rocksdb_compaction,
         rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter,
+        mev_log_path,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,

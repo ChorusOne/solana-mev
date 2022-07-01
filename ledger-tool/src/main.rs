@@ -928,6 +928,7 @@ fn load_bank_forks(
             &process_options,
             None,
             None,
+            None,
         );
 
     let pruned_banks_receiver =
