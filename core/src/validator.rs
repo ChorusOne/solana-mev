@@ -1,6 +1,7 @@
 //! The `validator` module hosts all the validator microservices.
 
 pub use solana_perf::report_target_features;
+use solana_runtime::mev::MevLog;
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
@@ -123,6 +124,7 @@ pub struct ValidatorConfig {
     pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
+    pub mev_log_path: PathBuf,
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
@@ -186,6 +188,7 @@ impl Default for ValidatorConfig {
             expected_bank_hash: None,
             expected_shred_version: None,
             voting_disabled: false,
+            mev_log_path: PathBuf::from("/tmp/mev_log.txt"),
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             account_shrink_paths: None,
@@ -354,6 +357,7 @@ pub struct Validator {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
+    mev: Arc<MevLog>,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
@@ -529,6 +533,8 @@ impl Validator {
         let poh_timing_report_service =
             PohTimingReportService::new(poh_timing_point_receiver, &exit);
 
+        let mev = Arc::new(MevLog::new(&config.mev_log_path));
+
         let (
             genesis_config,
             bank_forks,
@@ -558,6 +564,7 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
+            Some(mev.log_send_channel.clone()),
         );
 
         node.info.wallclock = timestamp();
@@ -1085,6 +1092,7 @@ impl Validator {
             completed_data_sets_service,
             tpu,
             tvu,
+            mev,
             poh_service,
             poh_recorder,
             ip_echo_server,
@@ -1379,6 +1387,7 @@ fn load_blockstore(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
+    log_send_channel: Option<crossbeam_channel::Sender<String>>,
 ) -> (
     GenesisConfig,
     Arc<RwLock<BankForks>>,
@@ -1489,6 +1498,7 @@ fn load_blockstore(
                 .cache_block_meta_sender
                 .as_ref(),
             accounts_update_notifier,
+            log_send_channel,
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that

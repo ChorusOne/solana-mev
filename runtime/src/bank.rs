@@ -328,6 +328,8 @@ pub struct BankRc {
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
+use crate::mev::Mev;
+
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
     fn example() -> Self {
@@ -1087,7 +1089,7 @@ pub struct Bank {
     /// The change to accounts data size in this Bank, due to off-chain events (i.e. rent collection)
     accounts_data_size_delta_off_chain: AtomicI64,
 
-    pub mev: RwLock<crate::mev::Mev>,
+    pub mev: Option<crate::mev::Mev>,
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
@@ -1168,7 +1170,7 @@ impl<'a> StorableAccounts<'a, AccountSharedData> for (Slot, &'a [StakeReward]) {
 
 impl Bank {
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts(Accounts::default_for_tests())
+        Self::default_with_accounts(Accounts::default_for_tests(), None)
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
@@ -1219,7 +1221,10 @@ impl Bank {
         )
     }
 
-    fn default_with_accounts(accounts: Accounts) -> Self {
+    fn default_with_accounts(
+        accounts: Accounts,
+        log_send_channel: Option<crossbeam_channel::Sender<String>>,
+    ) -> Self {
         let mut bank = Self {
             incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
@@ -1281,7 +1286,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: RwLock::new(crate::mev::Mev::new("/tmp/mev_log.txt")),
+            mev: log_send_channel.map(Mev::new),
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1312,6 +1317,7 @@ impl Bank {
             debug_do_not_add_builtins,
             accounts_db_config.or(Some(ACCOUNTS_DB_CONFIG_FOR_TESTING)),
             None,
+            None,
         )
     }
 
@@ -1336,6 +1342,7 @@ impl Bank {
             debug_do_not_add_builtins,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
+            None,
         )
     }
 
@@ -1351,6 +1358,7 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
+        log_send_channel: Option<crossbeam_channel::Sender<String>>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1361,7 +1369,7 @@ impl Bank {
             accounts_db_config,
             accounts_update_notifier,
         );
-        let mut bank = Self::default_with_accounts(accounts);
+        let mut bank = Self::default_with_accounts(accounts, log_send_channel);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
@@ -1608,7 +1616,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            mev: RwLock::new(crate::mev::Mev::new(parent.mev.read().unwrap().log_path)),
+            mev: parent.mev.clone(),
         };
 
         let (_, ancestors_time) = measure!(
@@ -1952,7 +1960,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: RwLock::new(crate::mev::Mev::new("/tmp/mev_log.txt")),
+            mev: new(),
         };
         bank.finish_init(
             genesis_config,
@@ -4347,7 +4355,7 @@ impl Bank {
 
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
-        let mut execution_results = Vec::new();
+        let mut execution_results = Vec::with_capacity(sanitized_txs.len());
         for (accs, tx) in loaded_transactions.iter_mut().zip(sanitized_txs.iter()) {
             match accs {
                 (Err(e), _nonce) => {
@@ -4391,10 +4399,11 @@ impl Bank {
                         compute_budget
                     };
 
-                    // Get MEV instance, we need write access to log things.
-                    let mut mev = self.mev.write().unwrap();
                     // Upon executing transaction `tx`, do we have a follow up transaction?
-                    let maybe_mev_transaction = mev.get_mev_transaction(tx, loaded_transaction);
+                    let maybe_mev_transaction = self
+                        .mev
+                        .as_ref()
+                        .and_then(|mev| mev.get_mev_transaction(tx, loaded_transaction));
 
                     let tx_result = self.execute_loaded_transaction(
                         tx,
@@ -4409,10 +4418,10 @@ impl Bank {
                         log_messages_bytes_limit,
                     );
                     execution_results.push(tx_result);
-                    if let Some((tx, mut loaded_transaction)) = maybe_mev_transaction {
+                    if let Some((mev_tx, mut mev_loaded_transaction)) = maybe_mev_transaction {
                         execution_results.push(self.execute_loaded_transaction(
-                            &tx,
-                            &mut loaded_transaction,
+                            &mev_tx,
+                            &mut mev_loaded_transaction,
                             compute_budget,
                             nonce.as_ref().map(DurableNonceFee::from),
                             enable_cpi_recording,
