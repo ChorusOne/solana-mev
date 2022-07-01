@@ -11,6 +11,7 @@ pub fn safe_clone_config(config: &ValidatorConfig) -> ValidatorConfig {
         expected_bank_hash: config.expected_bank_hash,
         expected_shred_version: config.expected_shred_version,
         voting_disabled: config.voting_disabled,
+        mev_log_path: config.mev_log_path.clone(),
         account_paths: config.account_paths.clone(),
         account_shrink_paths: config.account_shrink_paths.clone(),
         rpc_config: config.rpc_config.clone(),

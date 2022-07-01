@@ -587,6 +587,7 @@ pub fn test_process_blockstore(
             &opts,
             None,
             None,
+            None,
         );
     let (accounts_package_sender, _) = unbounded();
     process_blockstore_from_root(
@@ -611,6 +612,7 @@ pub(crate) fn process_blockstore_for_bank_0(
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
+    log_send_channel: Option<crossbeam_channel::Sender<String>>,
 ) -> BankForks {
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
@@ -624,6 +626,7 @@ pub(crate) fn process_blockstore_for_bank_0(
         false,
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
+        log_send_channel,
     );
     let bank_forks = BankForks::new(bank0);
 
