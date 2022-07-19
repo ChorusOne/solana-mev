@@ -4409,8 +4409,7 @@ impl Bank {
                         tx,
                         loaded_transaction,
                         compute_budget,
-                        // TODO(#29): Investigate nonce when crafting MEV transaction.
-                        None,
+                        nonce.as_ref().map(DurableNonceFee::from),
                         enable_cpi_recording,
                         enable_log_recording,
                         enable_return_data_recording,
@@ -4424,7 +4423,8 @@ impl Bank {
                             &mev_tx,
                             &mut mev_loaded_transaction,
                             compute_budget,
-                            nonce.as_ref().map(DurableNonceFee::from),
+                            // TODO(#29): Investigate nonce when crafting MEV transaction.
+                            None,
                             enable_cpi_recording,
                             enable_log_recording,
                             enable_return_data_recording,
