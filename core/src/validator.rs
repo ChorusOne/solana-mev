@@ -1,7 +1,9 @@
 //! The `validator` module hosts all the validator microservices.
 
+use std::str::FromStr;
+
 pub use solana_perf::report_target_features;
-use solana_runtime::mev::MevLog;
+use solana_runtime::mev::{Mev, MevLog};
 use {
     crate::{
         broadcast_stage::BroadcastStageType,
@@ -121,6 +123,7 @@ pub struct ValidatorConfig {
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
     pub mev_log_path: PathBuf,
+    pub mev_orca_program_id: Pubkey,
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
@@ -185,6 +188,8 @@ impl Default for ValidatorConfig {
             expected_shred_version: None,
             voting_disabled: false,
             mev_log_path: PathBuf::from("/tmp/mev_log.txt"),
+            mev_orca_program_id: Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP")
+                .expect("Orca v2 pubkey, cannot fail"),
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             account_shrink_paths: None,
@@ -347,7 +352,7 @@ pub struct Validator {
     pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
-    mev: Arc<MevLog>,
+    mev_log: Arc<MevLog>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -497,7 +502,12 @@ impl Validator {
             !config.no_os_cpu_stats_reporting,
         ));
 
-        let mev = Arc::new(MevLog::new(&config.mev_log_path));
+        let mev_log = Arc::new(MevLog::new(&config.mev_log_path));
+
+        let mev = Mev {
+            log_send_channel: mev_log.log_send_channel.clone(),
+            orca_program: config.mev_orca_program_id,
+        };
 
         let (
             genesis_config,
@@ -526,7 +536,7 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
-            Some(mev.log_send_channel.clone()),
+            Some(mev),
         );
 
         let last_full_snapshot_slot = process_blockstore(
@@ -1039,7 +1049,7 @@ impl Validator {
             blockstore: blockstore.clone(),
             accountsdb_repl_service,
             geyser_plugin_service,
-            mev,
+            mev_log,
         }
     }
 
@@ -1305,7 +1315,7 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
-    log_send_channel: Option<crossbeam_channel::Sender<String>>,
+    mev: Option<Mev>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1412,7 +1422,7 @@ fn load_blockstore(
             .cache_block_meta_sender
             .as_ref(),
         accounts_update_notifier,
-        log_send_channel,
+        mev,
     );
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());

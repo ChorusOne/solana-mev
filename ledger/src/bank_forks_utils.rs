@@ -1,3 +1,5 @@
+use solana_runtime::mev::Mev;
+
 use {
     crate::{
         blockstore::Blockstore,
@@ -48,7 +50,7 @@ pub fn load(
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_package_sender: AccountsPackageSender,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    log_send_channel: Option<crossbeam_channel::Sender<String>>,
+    mev: Option<Mev>,
 ) -> LoadResult {
     let (mut bank_forks, leader_schedule_cache, starting_snapshot_hashes, pruned_banks_receiver) =
         load_bank_forks(
@@ -60,7 +62,7 @@ pub fn load(
             &process_options,
             cache_block_meta_sender,
             accounts_update_notifier,
-            log_send_channel,
+            mev,
         );
 
     blockstore_processor::process_blockstore_from_root(
@@ -87,7 +89,7 @@ pub fn load_bank_forks(
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    log_send_channel: Option<crossbeam_channel::Sender<String>>,
+    mev: Option<Mev>,
 ) -> (
     BankForks,
     LeaderScheduleCache,
@@ -147,7 +149,7 @@ pub fn load_bank_forks(
                 process_options,
                 cache_block_meta_sender,
                 accounts_update_notifier,
-                log_send_channel,
+                mev,
             ),
             None,
         )

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::SanitizedTransaction;
 
 use crate::accounts::LoadedTransaction;
@@ -20,11 +21,15 @@ pub struct MevLog {
 #[derive(Debug, Clone)]
 pub struct Mev {
     pub log_send_channel: Sender<String>,
+    pub orca_program: Pubkey,
 }
 
 impl Mev {
-    pub fn new(log_send_channel: Sender<String>) -> Self {
-        Mev { log_send_channel }
+    pub fn new(log_send_channel: Sender<String>, orca_program: Pubkey) -> Self {
+        Mev {
+            log_send_channel,
+            orca_program,
+        }
     }
 
     pub fn get_mev_transaction(
