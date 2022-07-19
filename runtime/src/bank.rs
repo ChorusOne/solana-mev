@@ -1221,10 +1221,7 @@ impl Bank {
         )
     }
 
-    fn default_with_accounts(
-        accounts: Accounts,
-        log_send_channel: Option<crossbeam_channel::Sender<String>>,
-    ) -> Self {
+    fn default_with_accounts(accounts: Accounts, mev: Option<Mev>) -> Self {
         let mut bank = Self {
             incremental_snapshot_persistence: None,
             rewrites_skipped_this_slot: Rewrites::default(),
@@ -1286,7 +1283,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: log_send_channel.map(Mev::new),
+            mev,
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1358,7 +1355,7 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        log_send_channel: Option<crossbeam_channel::Sender<String>>,
+        mev: Option<Mev>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1369,7 +1366,7 @@ impl Bank {
             accounts_db_config,
             accounts_update_notifier,
         );
-        let mut bank = Self::default_with_accounts(accounts, log_send_channel);
+        let mut bank = Self::default_with_accounts(accounts, mev);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);

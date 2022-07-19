@@ -1828,6 +1828,15 @@ pub fn main() {
                 .help("Fully qualified path for MEV logging")
         )
         .arg(
+            Arg::with_name("mev_orca_program_id")
+                .long("mev-orca-program-id")
+                .takes_value(true)
+                .validator(is_pubkey)
+                .value_name("ADDRESS")
+                .default_value("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP")
+                .help("Orca address for MEV")
+        )
+        .arg(
             Arg::with_name("log_messages_bytes_limit")
                 .long("log-messages-bytes-limit")
                 .takes_value(true)
@@ -2598,6 +2607,10 @@ pub fn main() {
 
     let mev_log_path = PathBuf::from(matches.value_of("mev_log_path").unwrap_or_default());
 
+    let mev_orca_program_id =
+        Pubkey::from_str(matches.value_of("mev_orca_program_id").unwrap_or_default())
+            .expect("Was validated before by Clap");
+
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
         tower_storage,
@@ -2679,6 +2692,7 @@ pub fn main() {
         rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter,
         mev_log_path,
+        mev_orca_program_id,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,
