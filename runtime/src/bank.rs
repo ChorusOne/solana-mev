@@ -4397,10 +4397,10 @@ impl Bank {
                     };
 
                     // Upon executing transaction `tx`, do we have a follow up transaction?
-                    let maybe_mev_transaction = self
+                    let mev_opportunities = self
                         .mev
                         .as_ref()
-                        .and_then(|mev| mev.get_mev_transaction(tx, loaded_transaction));
+                        .and_then(|mev| Some(mev.get_mev_opportunities(tx, loaded_transaction)));
 
                     let tx_result = self.execute_loaded_transaction(
                         tx,
@@ -4415,20 +4415,24 @@ impl Bank {
                         log_messages_bytes_limit,
                     );
                     execution_results.push(tx_result);
-                    if let Some((mev_tx, mut mev_loaded_transaction)) = maybe_mev_transaction {
-                        execution_results.push(self.execute_loaded_transaction(
-                            &mev_tx,
-                            &mut mev_loaded_transaction,
-                            compute_budget,
-                            // TODO(#29): Investigate nonce when crafting MEV transaction.
-                            None,
-                            enable_cpi_recording,
-                            enable_log_recording,
-                            enable_return_data_recording,
-                            timings,
-                            &mut error_counters,
-                            log_messages_bytes_limit,
-                        ));
+                    if let Some(mev_opportunities) = mev_opportunities {
+                        self.mev
+                            .as_ref()
+                            .map(|mev| mev.execute_and_log_mev_opportunities(mev_opportunities));
+                        // TODO: Execute opportunities.
+                        // execution_results.push(self.execute_loaded_transaction(
+                        //     &mev_tx,
+                        //     &mut mev_loaded_transaction,
+                        //     compute_budget,
+                        //     // TODO(#29): Investigate nonce when crafting MEV transaction.
+                        //     None,
+                        //     enable_cpi_recording,
+                        //     enable_log_recording,
+                        //     enable_return_data_recording,
+                        //     timings,
+                        //     &mut error_counters,
+                        //     log_messages_bytes_limit,
+                        // ));
                     }
                 }
             }
