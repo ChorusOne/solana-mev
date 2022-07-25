@@ -4212,7 +4212,7 @@ impl Bank {
                     let mev_opportunities = self
                         .mev
                         .as_ref()
-                        .and_then(|mev| Some(mev.get_mev_opportunities(tx, loaded_transaction)));
+                        .map(|mev| mev.get_mev_opportunities(tx, loaded_transaction));
 
                     let tx_result = self.execute_loaded_transaction(
                         tx,
