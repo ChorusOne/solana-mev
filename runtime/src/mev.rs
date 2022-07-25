@@ -4,8 +4,10 @@ use std::path::PathBuf;
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
-use solana_sdk::instruction::CompiledInstruction;
-use solana_sdk::{account::ReadableAccount, pubkey::Pubkey, transaction::SanitizedTransaction};
+use solana_sdk::{
+    account::ReadableAccount, clock::Slot, hash::Hash, instruction::CompiledInstruction,
+    pubkey::Pubkey, transaction::SanitizedTransaction,
+};
 use spl_token::solana_program::program_pack::Pack;
 use spl_token_swap::{instruction::SwapInstruction, state::SwapVersion};
 
@@ -27,13 +29,38 @@ pub struct Mev {
 }
 
 pub struct MevOpportunity {
-    amount_in: u64,
-    minimum_amount_out: u64,
-    token_swap_source: Pubkey,
-    token_swap_source_amount: u64,
-    token_swap_destination: Pubkey,
-    token_swap_destination_amount: u64,
+    /// Amount from the source token.
+    amount_in_a: u64,
+    /// Minimum output from the destination token.
+    minimum_amount_out_b: u64,
+
+    /// Source account.
+    user_a_account: Pubkey,
+    user_a_pre_balance: u64,
+
+    /// Destination account.
+    user_b_account: Pubkey,
+    user_b_pre_balance: u64,
+
+    /// Source address, owned by the pool.
+    pool_a_account: Pubkey,
+    pool_a_pre_balance: u64,
+
+    /// Destination address, owned by the pool.
+    pool_b_account: Pubkey,
+    pool_b_pre_balance: u64,
+
+    // Should be the same as the `Pubkey` from the SDK.
+    a_token_mint: spl_token::solana_program::pubkey::Pubkey,
+    b_token_mint: spl_token::solana_program::pubkey::Pubkey,
+
+    /// Fees.
     fees: spl_token_swap::curve::fees::Fees,
+
+    /// Transaction hash.
+    transaction_hash: Hash,
+
+    slot: Slot,
 }
 
 impl std::fmt::Display for MevOpportunity {
@@ -41,12 +68,12 @@ impl std::fmt::Display for MevOpportunity {
         writeln!(
             f,
             "Orca, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
-            self.amount_in,
-            self.minimum_amount_out,
-            self.token_swap_source,
-            self.token_swap_source_amount,
-            self.token_swap_destination,
-            self.token_swap_destination_amount,
+            self.amount_in_a,
+            self.minimum_amount_out_b,
+            self.pool_a_account,
+            self.pool_a_pre_balance,
+            self.pool_b_account,
+            self.pool_b_pre_balance,
             self.fees.trade_fee_numerator,
             self.fees.trade_fee_denominator,
             self.fees.owner_trade_fee_numerator,
@@ -68,37 +95,53 @@ impl Mev {
     fn get_orca_msg_opportunity(
         compiled_ix: &CompiledInstruction,
         loaded_transaction: &mut LoadedTransaction,
+        transaction_hash: Hash,
+        slot: Slot,
     ) -> Option<MevOpportunity> {
-        let swap_ix = SwapInstruction::unpack(&compiled_ix.data);
-        if let Ok(SwapInstruction::Swap(swap)) = swap_ix {
-            let swap_addr_idx = *compiled_ix.accounts.get(0)?;
-            let swap_src_addr_idx = *compiled_ix.accounts.get(4)?;
-            let swap_dst_addr_idx = *compiled_ix.accounts.get(5)?;
+        let maybe_swap_ix = SwapInstruction::unpack(&compiled_ix.data);
+        if let Ok(SwapInstruction::Swap(swap)) = maybe_swap_ix {
+            let pool_addr_idx = *compiled_ix.accounts.get(0)?;
+            let user_a_addr_idx = *compiled_ix.accounts.get(3)?;
+            let pool_a_addr_idx = *compiled_ix.accounts.get(4)?;
+            let pool_b_addr_idx = *compiled_ix.accounts.get(5)?;
+            let user_b_addr_idx = *compiled_ix.accounts.get(5)?;
 
-            let (swap_src_addr, token_swap_src_account) = loaded_transaction
-                .accounts
-                .get(swap_src_addr_idx as usize)?;
-            let (swap_dst_addr, token_swap_dst_account) = loaded_transaction
-                .accounts
-                .get(swap_dst_addr_idx as usize)?;
+            let (user_a_addr, user_a_account) =
+                loaded_transaction.accounts.get(user_a_addr_idx as usize)?;
+            let (user_a_addr, user_b_account) =
+                loaded_transaction.accounts.get(user_b_addr_idx as usize)?;
 
-            let token_swap_src_account =
-                spl_token::state::Account::unpack(token_swap_src_account.data()).ok()?;
-            let token_swap_dst_account =
-                spl_token::state::Account::unpack(token_swap_dst_account.data()).ok()?;
+            let (pool_a_addr, pool_a_account) =
+                loaded_transaction.accounts.get(pool_a_addr_idx as usize)?;
+            let (pool_b_addr, pool_b_account) =
+                loaded_transaction.accounts.get(pool_b_addr_idx as usize)?;
 
-            let (_token_swap_addr, token_swap_account) =
-                loaded_transaction.accounts.get(swap_addr_idx as usize)?;
-            let token_swap = SwapVersion::unpack(&token_swap_account.data()).ok()?;
+            let user_a_account = spl_token::state::Account::unpack(user_a_account.data()).ok()?;
+            let user_b_account = spl_token::state::Account::unpack(user_b_account.data()).ok()?;
+
+            let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data()).ok()?;
+            let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data()).ok()?;
+
+            let (_pool_addr, pool_account) =
+                loaded_transaction.accounts.get(pool_addr_idx as usize)?;
+            let pool = SwapVersion::unpack(&pool_account.data()).ok()?;
 
             Some(MevOpportunity {
-                amount_in: swap.amount_in,
-                minimum_amount_out: swap.minimum_amount_out,
-                token_swap_source: *swap_src_addr,
-                token_swap_source_amount: token_swap_src_account.amount,
-                token_swap_destination: *swap_dst_addr,
-                token_swap_destination_amount: token_swap_dst_account.amount,
-                fees: token_swap.fees().clone(),
+                amount_in_a: swap.amount_in,
+                minimum_amount_out_b: swap.minimum_amount_out,
+                user_a_account: *user_a_addr,
+                user_a_pre_balance: user_a_account.amount,
+                user_b_account: *user_a_addr,
+                user_b_pre_balance: user_b_account.amount,
+                pool_a_account: *pool_a_addr,
+                pool_a_pre_balance: pool_a_account.amount,
+                pool_b_account: *pool_b_addr,
+                pool_b_pre_balance: pool_b_account.amount,
+                a_token_mint: pool_a_account.mint,
+                b_token_mint: pool_b_account.mint,
+                fees: pool.fees().clone(),
+                transaction_hash,
+                slot,
             })
         } else {
             None
@@ -109,11 +152,17 @@ impl Mev {
         &self,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
+        slot: Slot,
     ) -> Vec<MevOpportunity> {
         let mut msg_opportunities = Vec::new();
         for (addr, compiled_ix) in tx.message().program_instructions_iter() {
             if addr == &self.orca_program {
-                msg_opportunities.extend(Mev::get_orca_msg_opportunity(compiled_ix, loaded_transaction));
+                msg_opportunities.extend(Mev::get_orca_msg_opportunity(
+                    compiled_ix,
+                    loaded_transaction,
+                    *tx.message_hash(),
+                    slot,
+                ));
             }
         }
         msg_opportunities
