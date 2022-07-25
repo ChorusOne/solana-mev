@@ -113,11 +113,7 @@ impl Mev {
         let mut msg_opportunities = Vec::new();
         for (addr, compiled_ix) in tx.message().program_instructions_iter() {
             if addr == &self.orca_program {
-                if let Some(mev_opportunity) =
-                    Mev::get_orca_msg_opportunity(compiled_ix, loaded_transaction)
-                {
-                    msg_opportunities.push(mev_opportunity);
-                }
+                msg_opportunities.extend(Mev::get_orca_msg_opportunity(compiled_ix, loaded_transaction));
             }
         }
         msg_opportunities
