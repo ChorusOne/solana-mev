@@ -1,9 +1,8 @@
-use std::fs::{self};
-use std::io::Write;
-use std::path::PathBuf;
+use std::{fs, io::Write, path::PathBuf};
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
+use serde::{ser::SerializeStruct, Serialize};
 use solana_sdk::{
     account::ReadableAccount, clock::Slot, hash::Hash, instruction::CompiledInstruction,
     pubkey::Pubkey, transaction::SanitizedTransaction,
@@ -28,6 +27,28 @@ pub struct Mev {
     pub orca_program: Pubkey,
 }
 
+struct Fees(spl_token_swap::curve::fees::Fees);
+
+impl Serialize for Fees {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("Fees", 3)?;
+        state.serialize_field("hostFeeDenominator", &self.0.host_fee_denominator)?;
+        state.serialize_field("hostFeeNumerator", &self.0.host_fee_numerator)?;
+        state.serialize_field(
+            "ownerTradeFeeDenominator",
+            &self.0.owner_trade_fee_denominator,
+        )?;
+        state.serialize_field("ownerTradeFeeNumerator", &self.0.owner_trade_fee_numerator)?;
+        state.serialize_field("tradeFeeDenominator", &self.0.trade_fee_denominator)?;
+        state.serialize_field("tradeFeeNumerator", &self.0.trade_fee_numerator)?;
+        state.end()
+    }
+}
+
+#[derive(Serialize)]
 pub struct MevOpportunity {
     /// Amount from the source token.
     amount_in_a: u64,
@@ -55,33 +76,12 @@ pub struct MevOpportunity {
     b_token_mint: spl_token::solana_program::pubkey::Pubkey,
 
     /// Fees.
-    fees: spl_token_swap::curve::fees::Fees,
+    fees: Fees,
 
     /// Transaction hash.
     transaction_hash: Hash,
 
     slot: Slot,
-}
-
-impl std::fmt::Display for MevOpportunity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            "Orca, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}",
-            self.amount_in_a,
-            self.minimum_amount_out_b,
-            self.pool_a_account,
-            self.pool_a_pre_balance,
-            self.pool_b_account,
-            self.pool_b_pre_balance,
-            self.fees.trade_fee_numerator,
-            self.fees.trade_fee_denominator,
-            self.fees.owner_trade_fee_numerator,
-            self.fees.owner_trade_fee_denominator,
-            self.fees.host_fee_numerator,
-            self.fees.host_fee_denominator,
-        )
-    }
 }
 
 impl Mev {
@@ -108,7 +108,7 @@ impl Mev {
 
             let (user_a_addr, user_a_account) =
                 loaded_transaction.accounts.get(user_a_addr_idx as usize)?;
-            let (user_a_addr, user_b_account) =
+            let (user_b_addr, user_b_account) =
                 loaded_transaction.accounts.get(user_b_addr_idx as usize)?;
 
             let (pool_a_addr, pool_a_account) =
@@ -131,7 +131,7 @@ impl Mev {
                 minimum_amount_out_b: swap.minimum_amount_out,
                 user_a_account: *user_a_addr,
                 user_a_pre_balance: user_a_account.amount,
-                user_b_account: *user_a_addr,
+                user_b_account: *user_b_addr,
                 user_b_pre_balance: user_b_account.amount,
                 pool_a_account: *pool_a_addr,
                 pool_a_pre_balance: pool_a_account.amount,
@@ -139,7 +139,7 @@ impl Mev {
                 pool_b_pre_balance: pool_b_account.amount,
                 a_token_mint: pool_a_account.mint,
                 b_token_mint: pool_b_account.mint,
-                fees: pool.fees().clone(),
+                fees: Fees(pool.fees().clone()),
                 transaction_hash,
                 slot,
             })
@@ -191,7 +191,12 @@ impl MevLog {
 
         std::thread::spawn(move || loop {
             match log_receiver.recv() {
-                Ok(msg) => writeln!(file, "{}", msg).expect("[MEV] Could not write to file"),
+                Ok(msg) => writeln!(
+                    file,
+                    "{}",
+                    serde_json::to_string(&msg).expect("Constructed by us, should never fail")
+                )
+                .expect("[MEV] Could not write to file"),
                 Err(err) => error!("[MEV] Could not log arbitrage on file, error: {}", err),
             }
         });
