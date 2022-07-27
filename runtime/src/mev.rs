@@ -1,3 +1,5 @@
+mod utils;
+
 use std::{fs, io::Write, path::PathBuf};
 
 use crossbeam_channel::{unbounded, Sender};
@@ -10,7 +12,7 @@ use solana_sdk::{
 use spl_token::solana_program::program_pack::Pack;
 use spl_token_swap::{instruction::SwapInstruction, state::SwapVersion};
 
-use crate::accounts::LoadedTransaction;
+use crate::{accounts::LoadedTransaction, mev::utils::serialize_b58};
 
 /// MevLog saves the `log_send_channel` channel, where it can be passed and
 /// cloned in the `Bank` structure. We spawn a thread on the initialization of
@@ -27,6 +29,7 @@ pub struct Mev {
     pub orca_program: Pubkey,
 }
 
+#[derive(Debug)]
 struct Fees(spl_token_swap::curve::fees::Fees);
 
 impl Serialize for Fees {
@@ -35,20 +38,23 @@ impl Serialize for Fees {
         S: serde::Serializer,
     {
         let mut state = serializer.serialize_struct("Fees", 3)?;
-        state.serialize_field("hostFeeDenominator", &self.0.host_fee_denominator)?;
-        state.serialize_field("hostFeeNumerator", &self.0.host_fee_numerator)?;
+        state.serialize_field("host_fee_denominator", &self.0.host_fee_denominator)?;
+        state.serialize_field("host_fee_numerator", &self.0.host_fee_numerator)?;
         state.serialize_field(
-            "ownerTradeFeeDenominator",
+            "owner_trade_fee_denominator",
             &self.0.owner_trade_fee_denominator,
         )?;
-        state.serialize_field("ownerTradeFeeNumerator", &self.0.owner_trade_fee_numerator)?;
-        state.serialize_field("tradeFeeDenominator", &self.0.trade_fee_denominator)?;
-        state.serialize_field("tradeFeeNumerator", &self.0.trade_fee_numerator)?;
+        state.serialize_field(
+            "owner_trade_fee_numerator",
+            &self.0.owner_trade_fee_numerator,
+        )?;
+        state.serialize_field("trade_fee_denominator", &self.0.trade_fee_denominator)?;
+        state.serialize_field("trade_fee_numerator", &self.0.trade_fee_numerator)?;
         state.end()
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct MevOpportunity {
     /// Amount from the source token.
     amount_in_a: u64,
@@ -56,29 +62,36 @@ pub struct MevOpportunity {
     minimum_amount_out_b: u64,
 
     /// Source account.
+    #[serde(serialize_with = "serialize_b58")]
     user_a_account: Pubkey,
     user_a_pre_balance: u64,
 
     /// Destination account.
+    #[serde(serialize_with = "serialize_b58")]
     user_b_account: Pubkey,
     user_b_pre_balance: u64,
 
     /// Source address, owned by the pool.
+    #[serde(serialize_with = "serialize_b58")]
     pool_a_account: Pubkey,
     pool_a_pre_balance: u64,
 
     /// Destination address, owned by the pool.
+    #[serde(serialize_with = "serialize_b58")]
     pool_b_account: Pubkey,
     pool_b_pre_balance: u64,
 
     // Should be the same as the `Pubkey` from the SDK.
+    #[serde(serialize_with = "serialize_b58")]
     a_token_mint: spl_token::solana_program::pubkey::Pubkey,
+    #[serde(serialize_with = "serialize_b58")]
     b_token_mint: spl_token::solana_program::pubkey::Pubkey,
 
     /// Fees.
     fees: Fees,
 
     /// Transaction hash.
+    #[serde(serialize_with = "serialize_b58")]
     transaction_hash: Hash,
 
     slot: Slot,
@@ -206,4 +219,66 @@ impl MevLog {
             log_send_channel,
         }
     }
+}
+
+#[test]
+fn test_serialization() {
+    let opportunity = MevOpportunity {
+        amount_in_a: 1,
+        minimum_amount_out_b: 1,
+        user_a_account: Pubkey::new_unique(),
+        user_a_pre_balance: 1,
+        user_b_account: Pubkey::new_unique(),
+        user_b_pre_balance: 1,
+        pool_a_account: Pubkey::new_unique(),
+        pool_a_pre_balance: 1,
+        pool_b_account: Pubkey::new_unique(),
+        pool_b_pre_balance: 1,
+        a_token_mint: spl_token::solana_program::pubkey::Pubkey::new_from_array(
+            Pubkey::new_unique().to_bytes(),
+        ),
+        b_token_mint: spl_token::solana_program::pubkey::Pubkey::new_from_array(
+            Pubkey::new_unique().to_bytes(),
+        ),
+        fees: Fees(spl_token_swap::curve::fees::Fees {
+            trade_fee_numerator: 1,
+            trade_fee_denominator: 10,
+            owner_trade_fee_numerator: 1,
+            owner_trade_fee_denominator: 10,
+            owner_withdraw_fee_numerator: 1,
+            owner_withdraw_fee_denominator: 10,
+            host_fee_numerator: 1,
+            host_fee_denominator: 10,
+        }),
+        transaction_hash: Hash::new_unique(),
+        slot: 1,
+    };
+
+    let expected_result_str = "\
+        {\
+            \"amount_in_a\":1,\
+            \"minimum_amount_out_b\":1,\
+            \"user_a_account\":\"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM\",\
+            \"user_a_pre_balance\":1,\
+            \"user_b_account\":\"8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh\",\
+            \"user_b_pre_balance\":1,\
+            \"pool_a_account\":\"CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3\",\
+            \"pool_a_pre_balance\":1,\
+            \"pool_b_account\":\"GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP\",\
+            \"pool_b_pre_balance\":1,\
+            \"a_token_mint\":\"LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj\",\
+            \"b_token_mint\":\"QRSsyMWN1yHT9ir42bgNZUNZ4PdEhcSWCrL2AryKpy5\",\
+            \"fees\":{\
+            \"host_fee_denominator\":10,\
+            \"host_fee_numerator\":1,\
+            \"owner_trade_fee_denominator\":10,\
+            \"owner_trade_fee_numerator\":1,\
+            \"trade_fee_denominator\":10,\
+            \"trade_fee_numerator\":1\
+            },\
+            \"transaction_hash\":\"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM\",\
+            \"slot\":1\
+        }";
+    let serialized_json = serde_json::to_string(&opportunity).expect("Serialization failed");
+    assert_eq!(serialized_json, expected_result_str);
 }
