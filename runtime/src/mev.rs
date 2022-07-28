@@ -256,29 +256,30 @@ fn test_serialization() {
 
     let expected_result_str = "\
         {\
-            \"amount_in_a\":1,\
-            \"minimum_amount_out_b\":1,\
-            \"user_a_account\":\"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM\",\
-            \"user_a_pre_balance\":1,\
-            \"user_b_account\":\"8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh\",\
-            \"user_b_pre_balance\":1,\
-            \"pool_a_account\":\"CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3\",\
-            \"pool_a_pre_balance\":1,\
-            \"pool_b_account\":\"GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP\",\
-            \"pool_b_pre_balance\":1,\
-            \"a_token_mint\":\"LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj\",\
-            \"b_token_mint\":\"QRSsyMWN1yHT9ir42bgNZUNZ4PdEhcSWCrL2AryKpy5\",\
-            \"fees\":{\
-            \"host_fee_denominator\":10,\
-            \"host_fee_numerator\":1,\
-            \"owner_trade_fee_denominator\":10,\
-            \"owner_trade_fee_numerator\":1,\
-            \"trade_fee_denominator\":10,\
-            \"trade_fee_numerator\":1\
+            'amount_in_a':1,\
+            'minimum_amount_out_b':1,\
+            'user_a_account':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
+            'user_a_pre_balance':1,\
+            'user_b_account':'8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh',\
+            'user_b_pre_balance':1,\
+            'pool_a_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3',\
+            'pool_a_pre_balance':1,\
+            'pool_b_account':'GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP',\
+            'pool_b_pre_balance':1,\
+            'a_token_mint':'LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj',\
+            'b_token_mint':'QRSsyMWN1yHT9ir42bgNZUNZ4PdEhcSWCrL2AryKpy5',\
+            'fees':{\
+            'host_fee_denominator':10,\
+            'host_fee_numerator':1,\
+            'owner_trade_fee_denominator':10,\
+            'owner_trade_fee_numerator':1,\
+            'trade_fee_denominator':10,\
+            'trade_fee_numerator':1\
             },\
-            \"transaction_hash\":\"4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM\",\
-            \"slot\":1\
-        }";
+            'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
+            'slot':1\
+        }"
+    .replace("'", "\"");
     let serialized_json = serde_json::to_string(&opportunity).expect("Serialization failed");
     assert_eq!(serialized_json, expected_result_str);
 }
