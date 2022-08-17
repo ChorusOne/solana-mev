@@ -749,7 +749,7 @@ impl BankingStage {
                         &working_bank,
                         &bank_creation_time,
                         recorder,
-                        &payload.sanitized_transactions,
+                        &mut payload.sanitized_transactions,
                         transaction_status_sender.clone(),
                         gossip_vote_sender,
                         banking_stage_stats,
@@ -2018,7 +2018,7 @@ impl BankingStage {
         bank: &'a Arc<Bank>,
         bank_creation_time: &Instant,
         poh: &'a TransactionRecorder,
-        sanitized_transactions: &[SanitizedTransaction],
+        sanitized_transactions: &mut [SanitizedTransaction],
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &'a ReplayVoteSender,
         banking_stage_stats: &'a BankingStageStats,
@@ -2026,6 +2026,13 @@ impl BankingStage {
         slot_metrics_tracker: &'a mut LeaderSlotMetricsTracker,
         log_messages_bytes_limit: Option<usize>,
     ) -> ProcessTransactionsSummary {
+        // Go through the sanitized transactions and fill `mev_accounts` if
+        // necessary.
+        if let Some(mev) = &bank.mev {
+            for tx in sanitized_transactions.iter_mut() {
+                mev.fill_tx_mev_accounts(tx);
+            }
+        }
         // Process transactions
         let (mut process_transactions_summary, process_transactions_time) = measure!(
             Self::process_transactions(
