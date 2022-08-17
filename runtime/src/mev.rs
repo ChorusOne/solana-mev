@@ -117,7 +117,7 @@ impl Mev {
             let user_a_addr_idx = *compiled_ix.accounts.get(3)?;
             let pool_a_addr_idx = *compiled_ix.accounts.get(4)?;
             let pool_b_addr_idx = *compiled_ix.accounts.get(5)?;
-            let user_b_addr_idx = *compiled_ix.accounts.get(5)?;
+            let user_b_addr_idx = *compiled_ix.accounts.get(6)?;
 
             let (user_a_addr, user_a_account) =
                 loaded_transaction.accounts.get(user_a_addr_idx as usize)?;
