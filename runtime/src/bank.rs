@@ -4226,9 +4226,9 @@ impl Bank {
                     );
                     execution_results.push(tx_result);
                     if let Some(mev_opportunities) = mev_opportunities {
-                        self.mev
-                            .as_ref()
-                            .map(|mev| mev.execute_and_log_mev_opportunities(mev_opportunities));
+                        if let Some(mev) = self.mev.as_ref() {
+                            mev.execute_and_log_mev_opportunities(mev_opportunities);
+                        }
                         // TODO: Execute opportunities.
                         // execution_results.push(self.execute_loaded_transaction(
                         //     &mev_tx,

@@ -126,6 +126,7 @@ pub type TransactionProgramIndices = Vec<Vec<usize>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
+    pub mev_accounts: Vec<TransactionAccount>,
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
@@ -268,6 +269,7 @@ impl Accounts {
             let account_keys = message.account_keys();
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
+            let mut mev_accounts = Vec::with_capacity(tx.mev_keys.len());
             let mut rent_debits = RentDebits::default();
             let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
                 .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
@@ -370,6 +372,14 @@ impl Accounts {
                 };
                 accounts.push((*key, account));
             }
+
+            for key in tx.mev_keys.iter() {
+                let (mev_account, _slot) = self
+                    .accounts_db
+                    .load_with_fixed_root(ancestors, key, load_zero_lamports)
+                    .unwrap_or_default();
+                mev_accounts.push((*key, mev_account));
+            }
             debug_assert_eq!(accounts.len(), account_keys.len());
             // Appends the account_deps at the end of the accounts,
             // this way they can be accessed in a uniform way.
@@ -398,6 +408,7 @@ impl Accounts {
                     program_indices,
                     rent: tx_rent,
                     rent_debits,
+                    mev_accounts,
                 })
             } else {
                 error_counters.account_not_found += 1;
@@ -2983,6 +2994,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                mev_accounts: vec![],
             }),
             None,
         );
@@ -2993,6 +3005,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                mev_accounts: vec![],
             }),
             None,
         );
@@ -3492,6 +3505,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                mev_accounts: vec![],
             }),
             nonce.clone(),
         );
@@ -3621,6 +3635,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
+                mev_accounts: vec![],
             }),
             nonce.clone(),
         );

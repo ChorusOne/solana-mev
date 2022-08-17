@@ -32,6 +32,8 @@ pub struct SanitizedTransaction {
     message_hash: Hash,
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
+    // Store MEV interesting accounts to be loaded.
+    pub mev_keys: Vec<Pubkey>,
 }
 
 /// Set of accounts that must be locked for safe transaction processing
@@ -82,6 +84,7 @@ impl SanitizedTransaction {
             message_hash,
             is_simple_vote_tx,
             signatures,
+            mev_keys: Vec::new(),
         })
     }
 
@@ -123,6 +126,7 @@ impl SanitizedTransaction {
             message_hash,
             is_simple_vote_tx,
             signatures,
+            mev_keys: Vec::new(),
         })
     }
 
@@ -134,6 +138,7 @@ impl SanitizedTransaction {
             message: SanitizedMessage::Legacy(tx.message),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
+            mev_keys: Vec::new(),
         })
     }
 

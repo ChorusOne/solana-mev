@@ -504,10 +504,7 @@ impl Validator {
 
         let mev_log = Arc::new(MevLog::new(&config.mev_log_path));
 
-        let mev = Mev {
-            log_send_channel: mev_log.log_send_channel.clone(),
-            orca_program: config.mev_orca_program_id,
-        };
+        let mev = Mev::new(mev_log.log_send_channel.clone(), config.mev_orca_program_id);
 
         let (
             genesis_config,
