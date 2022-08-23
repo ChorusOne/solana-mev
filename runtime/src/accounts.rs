@@ -1060,6 +1060,7 @@ impl Accounts {
         account_locks: &mut AccountLocks,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
+        mev_keys: &Vec<Pubkey>,
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
@@ -1084,6 +1085,17 @@ impl Accounts {
             }
         }
 
+        for k in mev_keys {
+            // Account is already locked.
+            if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
+                continue;
+            }
+            // Account is not locked for read.
+            if !account_locks.lock_readonly(k) {
+                account_locks.insert_new_readonly(k);
+            }
+        }
+
         Ok(())
     }
 
@@ -1092,11 +1104,15 @@ impl Accounts {
         account_locks: &mut AccountLocks,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
+        mev_keys: &Vec<Pubkey>,
     ) {
         for k in writable_keys {
             account_locks.unlock_write(k);
         }
         for k in readonly_keys {
+            account_locks.unlock_readonly(k);
+        }
+        for k in mev_keys {
             account_locks.unlock_readonly(k);
         }
     }
@@ -1162,6 +1178,7 @@ impl Accounts {
                     account_locks,
                     tx_account_locks.writable,
                     tx_account_locks.readonly,
+                    tx_account_locks.readonly_mev,
                 ),
                 Err(err) => Err(err),
             })
@@ -1193,7 +1210,12 @@ impl Accounts {
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         keys.into_iter().for_each(|keys| {
-            self.unlock_account(&mut account_locks, keys.writable, keys.readonly);
+            self.unlock_account(
+                &mut account_locks,
+                keys.writable,
+                keys.readonly,
+                keys.readonly_mev,
+            );
         });
     }
 

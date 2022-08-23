@@ -37,12 +37,14 @@ pub struct SanitizedTransaction {
 }
 
 /// Set of accounts that must be locked for safe transaction processing
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct TransactionAccountLocks<'a> {
     /// List of readonly account key locks
     pub readonly: Vec<&'a Pubkey>,
     /// List of writable account key locks
     pub writable: Vec<&'a Pubkey>,
+    /// List of MEV readonly account key locks
+    pub readonly_mev: &'a Vec<Pubkey>,
 }
 
 /// Type that represents whether the transaction message has been precomputed or
@@ -218,6 +220,7 @@ impl SanitizedTransaction {
         let mut account_locks = TransactionAccountLocks {
             writable: Vec::with_capacity(num_writable_accounts),
             readonly: Vec::with_capacity(num_readonly_accounts),
+            readonly_mev: &self.mev_keys,
         };
 
         for (i, key) in account_keys.iter().enumerate() {
