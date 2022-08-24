@@ -143,7 +143,7 @@ impl Mev {
         }
     }
 
-    /// Attempts to deserialize the Orca accounts MEV is interested on,
+    /// Attempts to deserialize the Orca accounts MEV is interested in,
     /// in case the deserialization fails for some reason, returns the error.
     fn get_all_orca_interesting_accounts(
         &self,
