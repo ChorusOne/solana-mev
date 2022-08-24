@@ -53,6 +53,7 @@ pub struct OrcaPoolWithBalance {
     pool: OrcaPoolAddresses,
     pool_a_pre_balance: u64,
     pool_b_pre_balance: u64,
+    fees: Fees,
 }
 
 #[derive(Debug)]
@@ -105,9 +106,6 @@ pub struct MevOpportunity {
     #[serde(serialize_with = "serialize_b58")]
     b_token_mint: spl_token::solana_program::pubkey::Pubkey,
 
-    /// Fees.
-    fees: Fees,
-
     /// Transaction hash.
     #[serde(serialize_with = "serialize_b58")]
     transaction_hash: Hash,
@@ -158,21 +156,24 @@ impl Mev {
                 // `loaded_transaction.mev_accounts` and we should ensure the
                 // data is organized in triplets so we can later reconstruct it.
                 let [
-                    (pool, _pool_account),
+                    (pool_key, pool_account),
                     (pool_a_key, pool_a_account),
                     (pool_b_key, pool_b_account),
                     ] = [&s[0], &s[1], &s[2]];
+
+                let pool = SwapVersion::unpack(pool_account.data())?;
 
                 let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data())?;
                 let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data())?;
                 Ok(OrcaPoolWithBalance {
                     pool: OrcaPoolAddresses {
-                        address: *pool,
+                        address: *pool_key,
                         pool_a_account: *pool_a_key,
                         pool_b_account: *pool_b_key,
                     },
                     pool_a_pre_balance: pool_a_account.amount,
                     pool_b_pre_balance: pool_b_account.amount,
+                    fees: Fees(pool.fees().clone()),
                 })
             })
             .collect()
@@ -224,6 +225,7 @@ impl Mev {
                     },
                     pool_a_pre_balance: pool_a_account.amount,
                     pool_b_pre_balance: pool_b_account.amount,
+                    fees: Fees(pool.fees().clone()),
                 },
                 user_a_account: *user_a_addr,
                 user_a_pre_balance: user_a_account.amount,
@@ -231,7 +233,6 @@ impl Mev {
                 user_b_pre_balance: user_b_account.amount,
                 a_token_mint: pool_a_account.mint,
                 b_token_mint: pool_b_account.mint,
-                fees: Fees(pool.fees().clone()),
                 transaction_hash,
                 // TODO: If there is an error, this will be silently omitted.
                 interesting_accounts: self
@@ -317,6 +318,16 @@ fn test_serialization() {
             },
             pool_a_pre_balance: 1,
             pool_b_pre_balance: 1,
+            fees: Fees(spl_token_swap::curve::fees::Fees {
+                trade_fee_numerator: 1,
+                trade_fee_denominator: 10,
+                owner_trade_fee_numerator: 1,
+                owner_trade_fee_denominator: 10,
+                owner_withdraw_fee_numerator: 1,
+                owner_withdraw_fee_denominator: 10,
+                host_fee_numerator: 1,
+                host_fee_denominator: 10,
+            }),
         },
         user_a_account: Pubkey::new_unique(),
         user_a_pre_balance: 1,
@@ -328,16 +339,7 @@ fn test_serialization() {
         b_token_mint: spl_token::solana_program::pubkey::Pubkey::new_from_array(
             Pubkey::new_unique().to_bytes(),
         ),
-        fees: Fees(spl_token_swap::curve::fees::Fees {
-            trade_fee_numerator: 1,
-            trade_fee_denominator: 10,
-            owner_trade_fee_numerator: 1,
-            owner_trade_fee_denominator: 10,
-            owner_withdraw_fee_numerator: 1,
-            owner_withdraw_fee_denominator: 10,
-            host_fee_numerator: 1,
-            host_fee_denominator: 10,
-        }),
+
         transaction_hash: Hash::new_unique(),
         interesting_accounts: vec![],
         slot: 1,
@@ -354,7 +356,15 @@ fn test_serialization() {
                 'pool_b_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3'\
             },\
             'pool_a_pre_balance':1,\
-            'pool_b_pre_balance':1\
+            'pool_b_pre_balance':1,\
+            'fees':{\
+                'host_fee_denominator':10,\
+                'host_fee_numerator':1,\
+                'owner_trade_fee_denominator':10,\
+                'owner_trade_fee_numerator':1,\
+                'trade_fee_denominator':10,\
+                'trade_fee_numerator':1\
+                }\
             },\
             'user_a_account':'GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP',\
             'user_a_pre_balance':1,\
@@ -362,14 +372,6 @@ fn test_serialization() {
             'user_b_pre_balance':1,\
             'a_token_mint':'QRSsyMWN1yHT9ir42bgNZUNZ4PdEhcSWCrL2AryKpy5',\
             'b_token_mint':'UKrXU5bFrTzrqqpZXs8GVDbp4xPweiM65ADXNAy3ddR',\
-            'fees':{\
-            'host_fee_denominator':10,\
-            'host_fee_numerator':1,\
-            'owner_trade_fee_denominator':10,\
-            'owner_trade_fee_numerator':1,\
-            'trade_fee_denominator':10,\
-            'trade_fee_numerator':1\
-            },\
             'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
             'interesting_accounts':[],\
             'slot':1\
