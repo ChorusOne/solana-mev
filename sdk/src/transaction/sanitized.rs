@@ -33,7 +33,7 @@ pub struct SanitizedTransaction {
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
     // Store MEV interesting accounts to be loaded.
-    pub mev_keys: Vec<Pubkey>,
+    pub mev_keys: Vec<[Pubkey; 3]>,
 }
 
 /// Set of accounts that must be locked for safe transaction processing
@@ -44,7 +44,7 @@ pub struct TransactionAccountLocks<'a> {
     /// List of writable account key locks
     pub writable: Vec<&'a Pubkey>,
     /// List of MEV readonly account key locks
-    pub readonly_mev: &'a Vec<Pubkey>,
+    pub readonly_mev: &'a Vec<[Pubkey; 3]>,
 }
 
 /// Type that represents whether the transaction message has been precomputed or

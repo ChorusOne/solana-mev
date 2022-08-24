@@ -126,7 +126,7 @@ pub type TransactionProgramIndices = Vec<Vec<usize>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
-    pub mev_accounts: Vec<TransactionAccount>,
+    pub mev_accounts: Vec<[TransactionAccount; 3]>,
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
@@ -373,12 +373,15 @@ impl Accounts {
                 accounts.push((*key, account));
             }
 
-            for key in tx.mev_keys.iter() {
-                let (mev_account, _slot) = self
-                    .accounts_db
-                    .load_with_fixed_root(ancestors, key, load_zero_lamports)
-                    .unwrap_or_default();
-                mev_accounts.push((*key, mev_account));
+            for triplet in tx.mev_keys.iter() {
+                let loaded_accounts_tuple = triplet.map(|k| {
+                    let (mev_account, _slot) = self
+                        .accounts_db
+                        .load_with_fixed_root(ancestors, &k, load_zero_lamports)
+                        .unwrap_or_default();
+                    (k, mev_account)
+                });
+                mev_accounts.push(loaded_accounts_tuple);
             }
             debug_assert_eq!(accounts.len(), account_keys.len());
             // Appends the account_deps at the end of the accounts,
@@ -1060,7 +1063,7 @@ impl Accounts {
         account_locks: &mut AccountLocks,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
-        mev_keys: &Vec<Pubkey>,
+        mev_keys: &Vec<[Pubkey; 3]>,
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
@@ -1085,14 +1088,16 @@ impl Accounts {
             }
         }
 
-        for k in mev_keys {
-            // Account is already locked.
-            if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
-                continue;
-            }
-            // Account is not locked for read.
-            if !account_locks.lock_readonly(k) {
-                account_locks.insert_new_readonly(k);
+        for triplet in mev_keys {
+            for k in triplet {
+                // Account is already locked.
+                if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
+                    continue;
+                }
+                // Account is not locked for read.
+                if !account_locks.lock_readonly(k) {
+                    account_locks.insert_new_readonly(k);
+                }
             }
         }
 
@@ -1104,7 +1109,7 @@ impl Accounts {
         account_locks: &mut AccountLocks,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
-        mev_keys: &Vec<Pubkey>,
+        mev_keys: &Vec<[Pubkey; 3]>,
     ) {
         for k in writable_keys {
             account_locks.unlock_write(k);
@@ -1112,8 +1117,10 @@ impl Accounts {
         for k in readonly_keys {
             account_locks.unlock_readonly(k);
         }
-        for k in mev_keys {
-            account_locks.unlock_readonly(k);
+        for triplet in mev_keys {
+            for k in triplet {
+                account_locks.unlock_readonly(k);
+            }
         }
     }
 

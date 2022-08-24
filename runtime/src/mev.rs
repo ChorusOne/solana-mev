@@ -136,9 +136,11 @@ impl Mev {
             .any(|(program_id, _compiled_ix)| &self.orca_program == program_id)
         {
             for orca_pool in self.orca_interesting_accounts.iter() {
-                transaction.mev_keys.push(orca_pool.address);
-                transaction.mev_keys.push(orca_pool.pool_a_account);
-                transaction.mev_keys.push(orca_pool.pool_b_account);
+                transaction.mev_keys.push([
+                    orca_pool.address,
+                    orca_pool.pool_a_account,
+                    orca_pool.pool_b_account,
+                ]);
             }
         }
     }
@@ -150,17 +152,16 @@ impl Mev {
         loaded_transaction: &LoadedTransaction,
     ) -> Result<Vec<OrcaPoolWithBalance>, ProgramError> {
         loaded_transaction
-            .mev_accounts
-            .windows(3)
+            .mev_accounts.iter()
             .map(|s| {
                 // This should never overflow, we are the ones that construct
                 // `loaded_transaction.mev_accounts` and we should ensure the
                 // data is organized in triplets so we can later reconstruct it.
-                let (
+                let [
                     (pool, _pool_account),
                     (pool_a_key, pool_a_account),
                     (pool_b_key, pool_b_account),
-                ) = (&s[0], &s[1], &s[2]);
+                    ] = [&s[0], &s[1], &s[2]];
 
                 let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data())?;
                 let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data())?;
