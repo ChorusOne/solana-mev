@@ -4208,11 +4208,11 @@ impl Bank {
                         compute_budget
                     };
 
-                    // Upon executing transaction `tx`, do we have a follow up transaction?
-                    let mev_opportunities = self
+                    // Before executing `tx`, are we interested in the pool state?
+                    let pre_tx_pool_state = self
                         .mev
                         .as_ref()
-                        .map(|mev| mev.get_mev_opportunities(tx, loaded_transaction, self.slot));
+                        .and_then(|mev| mev.get_pre_tx_pool_state(tx, loaded_transaction));
 
                     let tx_result = self.execute_loaded_transaction(
                         tx,
@@ -4225,9 +4225,14 @@ impl Bank {
                         &mut error_counters,
                     );
                     execution_results.push(tx_result);
-                    if let Some(mev_opportunities) = mev_opportunities {
+                    if let Some(pre_pool_state) = pre_tx_pool_state {
                         if let Some(mev) = self.mev.as_ref() {
-                            mev.execute_and_log_mev_opportunities(mev_opportunities);
+                            mev.execute_and_log_mev_opportunities(
+                                tx,
+                                loaded_transaction,
+                                self.slot,
+                                pre_pool_state,
+                            );
                         }
                         // TODO: Execute opportunities.
                         // execution_results.push(self.execute_loaded_transaction(
