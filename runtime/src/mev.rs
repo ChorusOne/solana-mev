@@ -6,11 +6,11 @@ use crossbeam_channel::{unbounded, Sender};
 use log::error;
 use serde::{ser::SerializeStruct, Serialize};
 use solana_sdk::{
-    account::ReadableAccount, clock::Slot, hash::Hash, instruction::CompiledInstruction,
-    pubkey::Pubkey, transaction::SanitizedTransaction,
+    account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey,
+    transaction::SanitizedTransaction,
 };
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
-use spl_token_swap::{instruction::SwapInstruction, state::SwapVersion};
+use spl_token_swap::state::SwapVersion;
 
 use crate::{accounts::LoadedTransaction, mev::utils::serialize_b58};
 
@@ -20,12 +20,12 @@ use crate::{accounts::LoadedTransaction, mev::utils::serialize_b58};
 #[derive(Debug)]
 pub struct MevLog {
     pub log_path: PathBuf,
-    pub log_send_channel: Sender<MevOpportunity>,
+    pub log_send_channel: Sender<PrePostPoolState>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Mev {
-    pub log_send_channel: Sender<MevOpportunity>,
+    pub log_send_channel: Sender<PrePostPoolState>,
     pub orca_program: Pubkey,
 
     // These public keys are going to be loaded so we can ensure no other thread
@@ -81,41 +81,21 @@ impl Serialize for Fees {
     }
 }
 
+type PoolState = Vec<OrcaPoolWithBalance>;
+
 #[derive(Debug, Serialize)]
-pub struct MevOpportunity {
-    /// Amount from the source token.
-    amount_in_a: u64,
-    /// Minimum output from the destination token.
-    minimum_amount_out_b: u64,
-
-    pool_with_balance: OrcaPoolWithBalance,
-
-    /// Source account.
-    #[serde(serialize_with = "serialize_b58")]
-    user_a_account: Pubkey,
-    user_a_pre_balance: u64,
-
-    /// Destination account.
-    #[serde(serialize_with = "serialize_b58")]
-    user_b_account: Pubkey,
-    user_b_pre_balance: u64,
-
-    // Should be the same as the `Pubkey` from the SDK.
-    #[serde(serialize_with = "serialize_b58")]
-    a_token_mint: spl_token::solana_program::pubkey::Pubkey,
-    #[serde(serialize_with = "serialize_b58")]
-    b_token_mint: spl_token::solana_program::pubkey::Pubkey,
-
-    /// Transaction hash.
+pub struct PrePostPoolState {
+    /// Transaction hash which triggered the MEV.
     #[serde(serialize_with = "serialize_b58")]
     transaction_hash: Hash,
-
-    interesting_accounts: Vec<OrcaPoolWithBalance>,
     slot: Slot,
+
+    orca_pre_tx_pool: PoolState,
+    orca_post_tx_pool: PoolState,
 }
 
 impl Mev {
-    pub fn new(log_send_channel: Sender<MevOpportunity>, orca_program: Pubkey) -> Self {
+    pub fn new(log_send_channel: Sender<PrePostPoolState>, orca_program: Pubkey) -> Self {
         // TODO: Put this in a config file.
         let orca_interesting_accounts = Arc::new(vec![]);
         Mev {
@@ -179,100 +159,44 @@ impl Mev {
             .collect()
     }
 
-    fn get_orca_msg_opportunity(
+    pub fn get_pre_tx_pool_state(
         &self,
-        compiled_ix: &CompiledInstruction,
+        tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
-        transaction_hash: Hash,
-        slot: Slot,
-    ) -> Option<MevOpportunity> {
-        let maybe_swap_ix = SwapInstruction::unpack(&compiled_ix.data);
-        if let Ok(SwapInstruction::Swap(swap)) = maybe_swap_ix {
-            let pool_addr_idx = *compiled_ix.accounts.get(0)?;
-            let user_a_addr_idx = *compiled_ix.accounts.get(3)?;
-            let pool_a_addr_idx = *compiled_ix.accounts.get(4)?;
-            let pool_b_addr_idx = *compiled_ix.accounts.get(5)?;
-            let user_b_addr_idx = *compiled_ix.accounts.get(6)?;
-
-            let (user_a_addr, user_a_account) =
-                loaded_transaction.accounts.get(user_a_addr_idx as usize)?;
-            let (user_b_addr, user_b_account) =
-                loaded_transaction.accounts.get(user_b_addr_idx as usize)?;
-
-            let (pool_a_addr, pool_a_account) =
-                loaded_transaction.accounts.get(pool_a_addr_idx as usize)?;
-            let (pool_b_addr, pool_b_account) =
-                loaded_transaction.accounts.get(pool_b_addr_idx as usize)?;
-
-            let user_a_account = spl_token::state::Account::unpack(user_a_account.data()).ok()?;
-            let user_b_account = spl_token::state::Account::unpack(user_b_account.data()).ok()?;
-
-            let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data()).ok()?;
-            let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data()).ok()?;
-
-            let (pool_addr, pool_account) =
-                loaded_transaction.accounts.get(pool_addr_idx as usize)?;
-            let pool = SwapVersion::unpack(pool_account.data()).ok()?;
-
-            Some(MevOpportunity {
-                amount_in_a: swap.amount_in,
-                minimum_amount_out_b: swap.minimum_amount_out,
-                pool_with_balance: OrcaPoolWithBalance {
-                    pool: OrcaPoolAddresses {
-                        address: *pool_addr,
-                        pool_a_account: *pool_a_addr,
-                        pool_b_account: *pool_b_addr,
-                    },
-                    pool_a_pre_balance: pool_a_account.amount,
-                    pool_b_pre_balance: pool_b_account.amount,
-                    fees: Fees(pool.fees().clone()),
-                },
-                user_a_account: *user_a_addr,
-                user_a_pre_balance: user_a_account.amount,
-                user_b_account: *user_b_addr,
-                user_b_pre_balance: user_b_account.amount,
-                a_token_mint: pool_a_account.mint,
-                b_token_mint: pool_b_account.mint,
-                transaction_hash,
-                // TODO: If there is an error, this will be silently omitted.
-                interesting_accounts: self
+    ) -> Option<PoolState> {
+        for addr in tx.message().account_keys().iter() {
+            if addr == &self.orca_program {
+                return self
                     .get_all_orca_interesting_accounts(loaded_transaction)
-                    .ok()?,
-                slot,
-            })
-        } else {
-            None
+                    .ok();
+            }
         }
+        None
     }
 
-    pub fn get_mev_opportunities(
+    /// Execute and log the pool state after a transaction interacted with one or more
+    /// account from the pool.
+    pub fn execute_and_log_mev_opportunities(
         &self,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
         slot: Slot,
-    ) -> Vec<MevOpportunity> {
-        let mut msg_opportunities = Vec::new();
-        for (addr, compiled_ix) in tx.message().program_instructions_iter() {
-            if addr == &self.orca_program {
-                msg_opportunities.extend(self.get_orca_msg_opportunity(
-                    compiled_ix,
-                    loaded_transaction,
-                    *tx.message_hash(),
-                    slot,
-                ));
-            }
-        }
-        msg_opportunities
-    }
-
-    pub fn execute_and_log_mev_opportunities(&self, mev_opportunities: Vec<MevOpportunity>) {
-        for mev_opportunity in mev_opportunities {
-            if let Err(err) = self.log_send_channel.send(mev_opportunity) {
-                error!("[MEV] Could not log arbitrage, error: {}", err);
-            }
+        pre_tx_pool_state: PoolState,
+    ) -> Option<()> {
+        let post_tx_pool_state = self
+            .get_all_orca_interesting_accounts(loaded_transaction)
+            .ok()?;
+        if let Err(err) = self.log_send_channel.send(PrePostPoolState {
+            transaction_hash: *tx.message_hash(),
+            slot,
+            orca_pre_tx_pool: pre_tx_pool_state,
+            orca_post_tx_pool: post_tx_pool_state,
+        }) {
+            error!("[MEV] Could not log arbitrage, error: {}", err);
         }
 
         // TODO: Return something once we exploit arbitrage opportunities.
+        None
     }
 }
 
