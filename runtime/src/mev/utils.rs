@@ -3,7 +3,10 @@ use std::{fs::File, io::BufReader, path::PathBuf, str::FromStr};
 use serde::{Deserialize, Deserializer, Serializer};
 use solana_sdk::pubkey::Pubkey;
 
-use super::AllOrcaPoolAddresses;
+use super::OrcaPoolAddresses;
+
+#[derive(Debug, Deserialize)]
+pub struct AllOrcaPoolAddresses(pub Vec<OrcaPoolAddresses>);
 
 #[derive(Deserialize)]
 pub struct MevConfig {

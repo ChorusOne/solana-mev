@@ -17,7 +17,7 @@ use crate::{
     mev::utils::{deserialize_b58, serialize_b58},
 };
 
-use self::utils::MevConfig;
+use self::utils::{AllOrcaPoolAddresses, MevConfig};
 
 /// MevLog saves the `log_send_channel` channel, where it can be passed and
 /// cloned in the `Bank` structure. We spawn a thread on the initialization of
@@ -27,9 +27,6 @@ pub struct MevLog {
     pub log_send_channel: Sender<PrePostPoolState>,
 }
 
-#[derive(Deserialize)]
-pub struct AllOrcaPoolAddresses(Vec<OrcaPoolAddresses>);
-
 #[derive(Debug, Clone)]
 pub struct Mev {
     pub log_send_channel: Sender<PrePostPoolState>,
@@ -38,7 +35,7 @@ pub struct Mev {
     // These public keys are going to be loaded so we can ensure no other thread
     // modifies the data we are interested in.
     // TODO: Change this to pairs we are willing to trade on.
-    pub orca_interesting_accounts: Arc<Vec<OrcaPoolAddresses>>,
+    pub orca_interesting_accounts: Arc<AllOrcaPoolAddresses>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -105,13 +102,11 @@ pub struct PrePostPoolState {
 }
 
 impl Mev {
-    pub fn new(log_send_channel: Sender<PrePostPoolState>, orca_program: Pubkey) -> Self {
-        // TODO: Put this in a config file.
-        let orca_interesting_accounts = Arc::new(vec![]);
+    pub fn new(log_send_channel: Sender<PrePostPoolState>, config: MevConfig) -> Self {
         Mev {
             log_send_channel,
-            orca_program,
-            orca_interesting_accounts,
+            orca_program: config.orca_program_id,
+            orca_interesting_accounts: Arc::new(config.accounts),
         }
     }
 
@@ -123,7 +118,7 @@ impl Mev {
             .program_instructions_iter()
             .any(|(program_id, _compiled_ix)| &self.orca_program == program_id)
         {
-            for orca_pool in self.orca_interesting_accounts.iter() {
+            for orca_pool in self.orca_interesting_accounts.0.iter() {
                 transaction.mev_keys.push([
                     orca_pool.address,
                     orca_pool.pool_a_account,
