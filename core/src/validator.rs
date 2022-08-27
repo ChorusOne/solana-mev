@@ -1,9 +1,7 @@
 //! The `validator` module hosts all the validator microservices.
 
-use std::str::FromStr;
-
 pub use solana_perf::report_target_features;
-use solana_runtime::mev::{Mev, MevLog};
+use solana_runtime::mev::{utils::get_mev_config_file, Mev, MevLog};
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
@@ -126,8 +124,7 @@ pub struct ValidatorConfig {
     pub expected_bank_hash: Option<Hash>,
     pub expected_shred_version: Option<u16>,
     pub voting_disabled: bool,
-    pub mev_log_path: PathBuf,
-    pub mev_orca_program_id: Pubkey,
+    pub mev_config_path: Option<PathBuf>,
     pub account_paths: Vec<PathBuf>,
     pub account_shrink_paths: Option<Vec<PathBuf>>,
     pub rpc_config: JsonRpcConfig,
@@ -191,9 +188,7 @@ impl Default for ValidatorConfig {
             expected_bank_hash: None,
             expected_shred_version: None,
             voting_disabled: false,
-            mev_log_path: PathBuf::from("/tmp/mev_log.txt"),
-            mev_orca_program_id: Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP")
-                .expect("Orca v2 pubkey, cannot fail"),
+            mev_config_path: None,
             max_ledger_shreds: None,
             account_paths: Vec::new(),
             account_shrink_paths: None,
@@ -362,7 +357,7 @@ pub struct Validator {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
-    mev_log: Arc<MevLog>,
+    mev_log: Option<Arc<MevLog>>,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
@@ -538,9 +533,16 @@ impl Validator {
         let poh_timing_report_service =
             PohTimingReportService::new(poh_timing_point_receiver, &exit);
 
-        let mev_log = Arc::new(MevLog::new(&config.mev_log_path));
-
-        let mev = Mev::new(mev_log.log_send_channel.clone(), config.mev_orca_program_id);
+        let (mev_log, mev) = match &config.mev_config_path {
+            Some(config_path) => {
+                let mev_config = get_mev_config_file(config_path)
+                    .expect("Could not deserialize MEV config file.");
+                let mev_log = Arc::new(MevLog::new(&mev_config));
+                let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config.orca_program_id);
+                (Some(mev_log), Some(mev))
+            }
+            None => ((None, None)),
+        };
 
         let (
             genesis_config,
@@ -571,7 +573,7 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
-            Some(mev),
+            mev,
         );
 
         node.info.wallclock = timestamp();
