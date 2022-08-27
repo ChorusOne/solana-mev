@@ -1726,21 +1726,11 @@ pub fn main() {
                 .hidden(true),
         )
         .arg(
-            Arg::with_name("mev_log_path")
-                .long("mev-log-path")
-                .takes_value(true)
-                .value_name("FILE")
-                .default_value("/tmp/mev_log.txt")
-                .help("Fully qualified path for MEV logging")
-        )
-        .arg(
-            Arg::with_name("mev_orca_program_id")
-                .long("mev-orca-program-id")
-                .takes_value(true)
-                .validator(is_pubkey)
-                .value_name("ADDRESS")
-                .default_value("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP")
-                .help("Orca address for MEV")
+            Arg::with_name("mev_config_path")
+            .long("mev-config-path")
+            .takes_value(true)
+            .value_name("FILE")
+            .help("MEV config file")
         )
         .after_help("The default subcommand is run")
         .subcommand(
@@ -2497,11 +2487,9 @@ pub fn main() {
     }
     let full_api = matches.is_present("full_rpc_api");
 
-    let mev_log_path = PathBuf::from(matches.value_of("mev_log_path").unwrap_or_default());
-
-    let mev_orca_program_id =
-        Pubkey::from_str(matches.value_of("mev_orca_program_id").unwrap_or_default())
-            .expect("Was validated before by Clap");
+    let mev_config_path = matches
+        .value_of("mev_config_path")
+        .map(|config_path| PathBuf::from(config_path));
 
     let mut validator_config = ValidatorConfig {
         require_tower: matches.is_present("require_tower"),
@@ -2583,8 +2571,7 @@ pub fn main() {
         no_rocksdb_compaction,
         rocksdb_compaction_interval,
         rocksdb_max_compaction_jitter,
-        mev_log_path,
-        mev_orca_program_id,
+        mev_config_path,
         wal_recovery_mode,
         poh_verify: !matches.is_present("skip_poh_verify"),
         debug_keys,

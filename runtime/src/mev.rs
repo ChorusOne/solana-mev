@@ -1,6 +1,6 @@
-mod utils;
+pub mod utils;
 
-use std::{fs, io::Write, path::PathBuf, sync::Arc};
+use std::{fs, io::Write, sync::Arc};
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
@@ -12,16 +12,23 @@ use solana_sdk::{
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
 use spl_token_swap::state::SwapVersion;
 
-use crate::{accounts::LoadedTransaction, mev::utils::serialize_b58};
+use crate::{
+    accounts::LoadedTransaction,
+    mev::utils::{deserialize_b58, serialize_b58},
+};
+
+use self::utils::MevConfig;
 
 /// MevLog saves the `log_send_channel` channel, where it can be passed and
 /// cloned in the `Bank` structure. We spawn a thread on the initialization of
 /// the struct to listen and log data in `log_path`.
 #[derive(Debug)]
 pub struct MevLog {
-    pub log_path: PathBuf,
     pub log_send_channel: Sender<PrePostPoolState>,
 }
+
+#[derive(Deserialize)]
+pub struct AllOrcaPoolAddresses(Vec<OrcaPoolAddresses>);
 
 #[derive(Debug, Clone)]
 pub struct Mev {
@@ -34,17 +41,20 @@ pub struct Mev {
     pub orca_interesting_accounts: Arc<Vec<OrcaPoolAddresses>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OrcaPoolAddresses {
     #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
     address: Pubkey,
 
     /// Source address, owned by the pool.
     #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
     pool_a_account: Pubkey,
 
     /// Destination address, owned by the pool.
     #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
     pool_b_account: Pubkey,
 }
 
@@ -201,12 +211,12 @@ impl Mev {
 }
 
 impl MevLog {
-    pub fn new(log_path: &PathBuf) -> Self {
+    pub fn new(mev_config: &MevConfig) -> Self {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
-            .open(log_path)
+            .open(&mev_config.log_path)
             .expect("Failed while creating/opening MEV log file");
         let (log_send_channel, log_receiver) = unbounded();
 
@@ -222,10 +232,7 @@ impl MevLog {
             }
         });
 
-        MevLog {
-            log_path: log_path.clone(),
-            log_send_channel,
-        }
+        MevLog { log_send_channel }
     }
 }
 
