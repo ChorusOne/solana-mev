@@ -106,7 +106,7 @@ impl Mev {
         Mev {
             log_send_channel,
             orca_program: config.orca_program_id,
-            orca_interesting_accounts: Arc::new(config.accounts),
+            orca_interesting_accounts: Arc::new(config.orca_accounts),
         }
     }
 
