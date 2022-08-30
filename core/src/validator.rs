@@ -1,7 +1,7 @@
 //! The `validator` module hosts all the validator microservices.
 
 pub use solana_perf::report_target_features;
-use solana_runtime::mev::{utils::get_mev_config_file, Mev, MevLog};
+use solana_runtime::mev::{utils::get_mev_config_file, Mev, MevLog, MevMsg};
 use {
     crate::{
         broadcast_stage::BroadcastStageType,
@@ -347,7 +347,7 @@ pub struct Validator {
     pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
-    mev_log: Option<Arc<MevLog>>,
+    mev_log: Option<MevLog>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -500,7 +500,7 @@ impl Validator {
         let (mev_log, mev) = match &config.mev_config_path {
             Some(config_path) => {
                 let mev_config = get_mev_config_file(config_path);
-                let mev_log = Arc::new(MevLog::new(&mev_config));
+                let mev_log = MevLog::new(&mev_config);
                 let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
                 (Some(mev_log), Some(mev))
             }
@@ -1174,6 +1174,16 @@ impl Validator {
 
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
+        }
+        if let Some(mev_log) = self.mev_log {
+            mev_log
+                .log_send_channel
+                .send(MevMsg::Exit)
+                .expect("MEV failed to send msg to exit");
+            mev_log
+                .thread_handle
+                .join()
+                .expect("MEV logging thread panicked");
         }
     }
 }

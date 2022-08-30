@@ -1,6 +1,6 @@
 pub mod utils;
 
-use std::{fs, io::Write, sync::Arc};
+use std::{fs, io::Write, sync::Arc, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
@@ -24,12 +24,13 @@ use self::utils::{AllOrcaPoolAddresses, MevConfig};
 /// the struct to listen and log data in `log_path`.
 #[derive(Debug)]
 pub struct MevLog {
-    pub log_send_channel: Sender<PrePostPoolState>,
+    pub thread_handle: JoinHandle<()>,
+    pub log_send_channel: Sender<MevMsg>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Mev {
-    pub log_send_channel: Sender<PrePostPoolState>,
+    pub log_send_channel: Sender<MevMsg>,
     pub orca_program: Pubkey,
 
     // These public keys are going to be loaded so we can ensure no other thread
@@ -90,6 +91,11 @@ impl Serialize for Fees {
 
 type PoolState = Vec<OrcaPoolWithBalance>;
 
+pub enum MevMsg {
+    Log(PrePostPoolState),
+    Exit,
+}
+
 #[derive(Debug, Serialize)]
 pub struct PrePostPoolState {
     /// Transaction hash which triggered the MEV.
@@ -102,7 +108,7 @@ pub struct PrePostPoolState {
 }
 
 impl Mev {
-    pub fn new(log_send_channel: Sender<PrePostPoolState>, config: MevConfig) -> Self {
+    pub fn new(log_send_channel: Sender<MevMsg>, config: MevConfig) -> Self {
         Mev {
             log_send_channel,
             orca_program: config.orca_program_id,
@@ -191,12 +197,12 @@ impl Mev {
         let post_tx_pool_state = self
             .get_all_orca_interesting_accounts(loaded_transaction)
             .ok()?;
-        if let Err(err) = self.log_send_channel.send(PrePostPoolState {
+        if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolState {
             transaction_hash: *tx.message_hash(),
             slot,
             orca_pre_tx_pool: pre_tx_pool_state,
             orca_post_tx_pool: post_tx_pool_state,
-        }) {
+        })) {
             error!("[MEV] Could not log arbitrage, error: {}", err);
         }
 
@@ -215,19 +221,24 @@ impl MevLog {
             .expect("Failed while creating/opening MEV log file");
         let (log_send_channel, log_receiver) = unbounded();
 
-        std::thread::spawn(move || loop {
+        let thread_handle = std::thread::spawn(move || loop {
             match log_receiver.recv() {
-                Ok(msg) => writeln!(
+                Ok(MevMsg::Log(msg)) => writeln!(
                     file,
                     "{}",
                     serde_json::to_string(&msg).expect("Constructed by us, should never fail")
                 )
                 .expect("[MEV] Could not write to file"),
+
+                Ok(MevMsg::Exit) => break,
                 Err(err) => error!("[MEV] Could not log arbitrage on file, error: {}", err),
             }
         });
 
-        MevLog { log_send_channel }
+        MevLog {
+            thread_handle,
+            log_send_channel,
+        }
     }
 }
 
