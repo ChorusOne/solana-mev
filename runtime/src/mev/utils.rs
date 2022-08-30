@@ -13,8 +13,7 @@ pub struct MevConfig {
     pub log_path: PathBuf,
     #[serde(deserialize_with = "deserialize_b58")]
     pub orca_program_id: Pubkey,
-    pub pool: String,
-    pub accounts: AllOrcaPoolAddresses,
+    pub orca_accounts: AllOrcaPoolAddresses,
 }
 
 /// Function to use when serializing a public key, to print it using base58.

@@ -97,6 +97,7 @@ impl Default for TestValidatorNodeConfig {
 pub struct TestValidatorGenesis {
     fee_rate_governor: FeeRateGovernor,
     ledger_path: Option<PathBuf>,
+    pub mev_config_path: Option<PathBuf>,
     tower_storage: Option<Arc<dyn TowerStorage>>,
     pub rent: Rent,
     rpc_config: JsonRpcConfig,
@@ -125,6 +126,7 @@ impl Default for TestValidatorGenesis {
         Self {
             fee_rate_governor: FeeRateGovernor::default(),
             ledger_path: Option::<PathBuf>::default(),
+            mev_config_path: Option::<PathBuf>::default(),
             tower_storage: Option::<Arc<dyn TowerStorage>>::default(),
             rent: Rent::default(),
             rpc_config: JsonRpcConfig::default_for_test(),
@@ -737,6 +739,7 @@ impl TestValidator {
             max_ledger_shreds: config.max_ledger_shreds,
             no_wait_for_vote_to_start_leader: true,
             accounts_db_config,
+            mev_config_path: config.mev_config_path.clone(),
             ..ValidatorConfig::default_for_test()
         };
         if let Some(ref tower_storage) = config.tower_storage {

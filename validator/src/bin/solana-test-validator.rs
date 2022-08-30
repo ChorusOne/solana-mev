@@ -377,6 +377,13 @@ fn main() {
                 .multiple(true)
                 .help("deactivate this feature in genesis.")
         )
+        .arg(
+            Arg::with_name("mev_config_path")
+            .long("mev-config-path")
+            .takes_value(true)
+            .value_name("FILE")
+            .help("MEV config file")
+        )
         .get_matches();
 
     let output = if matches.is_present("quiet") {
@@ -630,6 +637,10 @@ fn main() {
     }
 
     let mut genesis = TestValidatorGenesis::default();
+
+    genesis.mev_config_path = matches
+        .value_of("mev_config_path")
+        .map(|config_path| PathBuf::from(config_path));
     genesis.max_ledger_shreds = value_of(&matches, "limit_ledger_size");
     genesis.max_genesis_archive_unpacked_size = Some(u64::MAX);
     genesis.accounts_db_caching_enabled = !matches.is_present("no_accounts_db_caching");
