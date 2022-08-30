@@ -1,7 +1,7 @@
 //! The `validator` module hosts all the validator microservices.
 
 pub use solana_perf::report_target_features;
-use solana_runtime::mev::{utils::get_mev_config_file, Mev, MevLog};
+use solana_runtime::mev::{utils::get_mev_config_file, Mev, MevLog, MevMsg};
 use {
     crate::{
         accounts_hash_verifier::AccountsHashVerifier,
@@ -357,7 +357,7 @@ pub struct Validator {
     poh_service: PohService,
     tpu: Tpu,
     tvu: Tvu,
-    mev_log: Option<Arc<MevLog>>,
+    mev_log: Option<MevLog>,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
@@ -536,7 +536,7 @@ impl Validator {
         let (mev_log, mev) = match &config.mev_config_path {
             Some(config_path) => {
                 let mev_config = get_mev_config_file(config_path);
-                let mev_log = Arc::new(MevLog::new(&mev_config));
+                let mev_log = MevLog::new(&mev_config);
                 let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
                 (Some(mev_log), Some(mev))
             }
@@ -1242,7 +1242,16 @@ impl Validator {
         if let Some(geyser_plugin_service) = self.geyser_plugin_service {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
-
+        if let Some(mev_log) = self.mev_log {
+            mev_log
+                .log_send_channel
+                .send(MevMsg::Exit)
+                .expect("MEV failed to send msg to exit");
+            mev_log
+                .thread_handle
+                .join()
+                .expect("MEV logging thread panicked");
+        }
         self.poh_timing_report_service
             .join()
             .expect("poh_timing_report_service");
