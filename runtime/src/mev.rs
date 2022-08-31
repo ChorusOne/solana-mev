@@ -29,7 +29,7 @@ pub struct Mev {
     pub orca_program: Pubkey,
 
     // These public keys are going to be loaded so we can ensure no other thread
-    // modifies the data we are interested on.
+    // modifies the data we are interested in.
     // TODO: Change this to pairs we are willing to trade on.
     pub orca_interesting_accounts: Arc<Vec<OrcaPoolAddresses>>,
 }
