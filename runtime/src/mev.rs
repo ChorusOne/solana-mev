@@ -38,7 +38,7 @@ pub struct Mev {
     pub orca_interesting_accounts: Arc<AllOrcaPoolAddresses>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct OrcaPoolAddresses {
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
@@ -232,15 +232,19 @@ impl MevLog {
 }
 
 #[test]
-fn test_serialization() {
-    let opportunity = MevOpportunity {
-        amount_in_a: 1,
-        minimum_amount_out_b: 1,
-        pool_with_balance: OrcaPoolWithBalance {
+fn test_log_serialization() {
+    use std::str::FromStr;
+
+    let opportunity = PrePostPoolState {
+        transaction_hash: Hash::new_unique(),
+        slot: 1,
+        orca_pre_tx_pool: vec![OrcaPoolWithBalance {
             pool: OrcaPoolAddresses {
-                address: Pubkey::new_unique(),
-                pool_a_account: Pubkey::new_unique(),
-                pool_b_account: Pubkey::new_unique(),
+                address: Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap(),
+                pool_a_account: Pubkey::from_str("8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh")
+                    .unwrap(),
+                pool_b_account: Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3")
+                    .unwrap(),
             },
             pool_a_pre_balance: 1,
             pool_b_pre_balance: 1,
@@ -254,54 +258,35 @@ fn test_serialization() {
                 host_fee_numerator: 1,
                 host_fee_denominator: 10,
             }),
-        },
-        user_a_account: Pubkey::new_unique(),
-        user_a_pre_balance: 1,
-        user_b_account: Pubkey::new_unique(),
-        user_b_pre_balance: 1,
-        a_token_mint: spl_token::solana_program::pubkey::Pubkey::new_from_array(
-            Pubkey::new_unique().to_bytes(),
-        ),
-        b_token_mint: spl_token::solana_program::pubkey::Pubkey::new_from_array(
-            Pubkey::new_unique().to_bytes(),
-        ),
-
-        transaction_hash: Hash::new_unique(),
-        interesting_accounts: vec![],
-        slot: 1,
+        }],
+        orca_post_tx_pool: vec![],
     };
 
     let expected_result_str = "\
-        {\
-            'amount_in_a':1,\
-            'minimum_amount_out_b':1,\
-            'pool_with_balance':{\
+    {\
+        'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
+        'slot':1,\
+        'orca_pre_tx_pool':[\
+          {\
             'pool':{\
-                'address':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
-                'pool_a_account':'8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh',\
-                'pool_b_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3'\
+              'address':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
+              'pool_a_account':'8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh',\
+              'pool_b_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3'\
             },\
             'pool_a_pre_balance':1,\
             'pool_b_pre_balance':1,\
             'fees':{\
-                'host_fee_denominator':10,\
-                'host_fee_numerator':1,\
-                'owner_trade_fee_denominator':10,\
-                'owner_trade_fee_numerator':1,\
-                'trade_fee_denominator':10,\
-                'trade_fee_numerator':1\
-                }\
-            },\
-            'user_a_account':'GcdayuLaLyrdmUu324nahyv33G5poQdLUEZ1nEytDeP',\
-            'user_a_pre_balance':1,\
-            'user_b_account':'LX3EUdRUBUa3TbsYXLEUdj9J3prXkWXvLYSWyYyc2Jj',\
-            'user_b_pre_balance':1,\
-            'a_token_mint':'QRSsyMWN1yHT9ir42bgNZUNZ4PdEhcSWCrL2AryKpy5',\
-            'b_token_mint':'UKrXU5bFrTzrqqpZXs8GVDbp4xPweiM65ADXNAy3ddR',\
-            'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
-            'interesting_accounts':[],\
-            'slot':1\
-        }"
+              'host_fee_denominator':10,\
+              'host_fee_numerator':1,\
+              'owner_trade_fee_denominator':10,\
+              'owner_trade_fee_numerator':1,\
+              'trade_fee_denominator':10,\
+              'trade_fee_numerator':1\
+            }\
+          }\
+        ],\
+        'orca_post_tx_pool':[]\
+      }"
     .replace("'", "\"");
     let serialized_json = serde_json::to_string(&opportunity).expect("Serialization failed");
     assert_eq!(serialized_json, expected_result_str);
