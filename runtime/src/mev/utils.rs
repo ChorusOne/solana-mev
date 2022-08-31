@@ -1,4 +1,4 @@
-use std::{fs::File, io::BufReader, path::PathBuf, str::FromStr};
+use std::{fs::read_to_string, path::PathBuf, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serializer};
 use solana_sdk::pubkey::Pubkey;
@@ -30,8 +30,7 @@ where
     Pubkey::from_str(&buf).map_err(serde::de::Error::custom)
 }
 
-pub fn get_mev_config_file(config_path: &PathBuf) -> Result<MevConfig, serde_json::Error> {
-    let file = File::open(config_path).expect("Could not open config path.");
-    let reader = BufReader::new(file);
-    serde_json::from_reader(reader)
+pub fn get_mev_config_file(config_path: &PathBuf) -> MevConfig {
+    let config_str = read_to_string(config_path).expect("Could not open config path.");
+    toml::from_str(&config_str).expect("Could not deserialize MEV config file.")
 }
