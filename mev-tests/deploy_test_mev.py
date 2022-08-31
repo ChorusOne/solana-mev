@@ -24,7 +24,7 @@ from util import (
 orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
 # https://solscan.io/account/9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP
 
-deploy_path = '/Users/thalita/solana-private/mev-tests/target/deploy'
+deploy_path = '/mev-tests/target/deploy'
 
 # Create a fresh directory where we store all the keys and configuration for this
 # deployment.
