@@ -499,8 +499,7 @@ impl Validator {
 
         let (mev_log, mev) = match &config.mev_config_path {
             Some(config_path) => {
-                let mev_config = get_mev_config_file(config_path)
-                    .expect("Could not deserialize MEV config file.");
+                let mev_config = get_mev_config_file(config_path);
                 let mev_log = Arc::new(MevLog::new(&mev_config));
                 let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
                 (Some(mev_log), Some(mev))

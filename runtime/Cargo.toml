@@ -63,6 +63,7 @@ strum = { version = "0.24", features = ["derive"] }
 spl-token = { version = "3.5.0", features = ["no-entrypoint"] }
 spl-token-swap = "3.0.0"
 serde_json = "1.0.79"
+toml = "0.5.9"
 
 [lib]
 crate-type = ["lib"]
