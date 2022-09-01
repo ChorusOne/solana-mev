@@ -53,30 +53,38 @@ else:
     )
 print(f'> Token swap program id is {token_swap_program_id}')
 
-# Next up is the token pool, but to be able to set that up,
-# we need tokens and then we need to put that in some new accounts
-# that the pool will take ownership of.
+# creates token 0 and token account
 t0_mint_keypair = create_test_account(f'{test_dir}/token0-mint.json', fund=False)
 spl_token('create-token', f'{test_dir}/token0-mint.json', '--decimals', '6')
 token0_mint_address = t0_mint_keypair.pubkey
-t0_account_info_json = spl_token('create-account', token0_mint_address, '--output', 'json')
-spl_token('mint', t0_mint_keypair.pubkey, '0.1')
+
+t0_account = create_test_account(f'{test_dir}/token0-account.json', fund=False)
+spl_token('create-account', token0_mint_address, t0_account.keypair_path, '--output', 'json')
+spl_token('mint', t0_mint_keypair.pubkey, '0.1', t0_account.pubkey)
 print('> Minted ourselves 0.1 token 0.')
 
+# creates token 1 and token account
 t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
 spl_token('create-token', f'{test_dir}/token1-mint.json', '--decimals', '6')
 token1_mint_address = t1_mint_keypair.pubkey
-t1_account_info_json = spl_token('create-account', token1_mint_address, '--output', 'json')
-spl_token('mint', t1_mint_keypair.pubkey, '0.1')
+
+t1_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
+spl_token('create-account', token1_mint_address, t1_account.keypair_path, '--output', 'json')
+spl_token('mint', t1_mint_keypair.pubkey, '0.1', t1_account.pubkey)
 print('> Minted ourselves 0.1 token 1.')
 
 print('\nSetting up pool ...')
 
-# pool accounts and transfer tokens
+# creates pool accounts and transfer tokens
 pool_t0_keypair = create_test_account(f'{test_dir}/pool-t0.json', fund=False)
 pool_t1_keypair = create_test_account(f'{test_dir}/pool-t1.json', fund=False)
-spl_token('create-account', token0_mint_address, pool_t0_keypair.keypair_path)
-spl_token('create-account', token1_mint_address, pool_t1_keypair.keypair_path)
 
-spl_token('transfer', token0_mint_address, '0.1', pool_t0_keypair.pubkey)
-spl_token('transfer', token1_mint_address, '0.1', pool_t1_keypair.pubkey)
+spl_token('create-account', token0_mint_address, pool_t0_keypair.keypair_path)
+print('created account pool_token0: ', pool_t0_keypair.pubkey)
+
+spl_token('create-account', token1_mint_address, pool_t1_keypair.keypair_path)
+print('created account pool_token1: ', pool_t1_keypair.pubkey)
+
+spl_token('transfer', token0_mint_address, '0.1', pool_t0_keypair.pubkey, '--from', t0_account.pubkey)
+spl_token('transfer', token1_mint_address, '0.1', pool_t1_keypair.pubkey, '--from', t1_account.pubkey)
+
