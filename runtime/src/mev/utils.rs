@@ -13,6 +13,7 @@ pub struct MevConfig {
     pub log_path: PathBuf,
     #[serde(deserialize_with = "deserialize_b58")]
     pub orca_program_id: Pubkey,
+    #[serde(rename(deserialize = "orca_account"))]
     pub orca_accounts: AllOrcaPoolAddresses,
 }
 
@@ -41,13 +42,13 @@ fn test_deserialization() {
         r#"
     log_path = '/tmp/mev.log'
     orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
-    [[orca_accounts]]
+    [[orca_account]]
         _id = 'USDC/USDT[stable]'
         address = 'FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ'
         pool_a_account = 'EjUNm7Lzp6X8898JiCU28SbfQBfsYoWaViXUhCgizv82'
         pool_b_account = 'C1ZrV56rf1wbDzcnHY6FpNaVmzT5D8WtyEKS1FAGrboe'
 
-    [[orca_accounts]]
+    [[orca_account]]
         _id = 'SOL/USDC[aquafarm]'
         address = 'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U'
         pool_a_account = 'ANP74VNsHwSrq9uUSjiSNyNWvf6ZPrKTmE4gHoNd13Lg'
