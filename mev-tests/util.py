@@ -15,8 +15,6 @@ from uuid import uuid4
 
 from typing import List, NamedTuple, Any, Optional, Callable, Dict, Tuple
 
-MAX_VALIDATION_COMMISSION_PERCENTAGE = 5
-
 
 class TestAccount(NamedTuple):
     pubkey: str
