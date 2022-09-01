@@ -1090,8 +1090,8 @@ impl Accounts {
 
         for triplet in mev_keys {
             for k in triplet {
-                // Account is already locked.
-                if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
+                // Account is already locked for writing.
+                if account_locks.is_locked_write(k) {
                     continue;
                 }
                 // Account is not locked for read.
@@ -1111,16 +1111,20 @@ impl Accounts {
         readonly_keys: Vec<&Pubkey>,
         mev_keys: &Vec<[Pubkey; 3]>,
     ) {
+        for triplet in mev_keys {
+            for k in triplet {
+                // Account was locked for write, we shouldn't try to unlock it.
+                if account_locks.is_locked_write(k) {
+                    continue;
+                }
+                account_locks.unlock_readonly(k);
+            }
+        }
         for k in writable_keys {
             account_locks.unlock_write(k);
         }
         for k in readonly_keys {
             account_locks.unlock_readonly(k);
-        }
-        for triplet in mev_keys {
-            for k in triplet {
-                account_locks.unlock_readonly(k);
-            }
         }
     }
 
