@@ -24,7 +24,9 @@ from util import (
 orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
 # https://solscan.io/account/9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP
 
-deploy_path = '/mev-tests/target/deploy'
+# replace to use ENV vars
+s_dir = os.getcwd()
+deploy_path = s_dir + '/mev-tests/target/deploy'
 
 # Create a fresh directory where we store all the keys and configuration for this
 # deployment.
@@ -57,43 +59,24 @@ print(f'> Token swap program id is {token_swap_program_id}')
 t0_mint_keypair = create_test_account(f'{test_dir}/token0-mint.json', fund=False)
 spl_token('create-token', f'{test_dir}/token0-mint.json', '--decimals', '6')
 token0_mint_address = t0_mint_keypair.pubkey
-
-try:
-    t0_account_info_json = spl_token(
-        'create-account', token0_mint_address, '--output', 'json'
-    )
-except subprocess.CalledProcessError:
-    # "spl-token create-account" fails if the associated token account exists
-    # already. It would be nice to check whether it exists before we try to
-    # create it, but unfortunately there appears to be no way to get the address
-    # of the associated token account, either through the Solana RPC, or through
-    # one of the command-line tools. The associated token account address remains
-    # implicit everywhere :/
-    pass
+t0_account_info_json = spl_token('create-account', token0_mint_address, '--output', 'json')
+spl_token('mint', t0_mint_keypair.pubkey, '0.1')
+print('> Minted ourselves 0.1 token 0.')
 
 t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
 spl_token('create-token', f'{test_dir}/token1-mint.json', '--decimals', '6')
 token1_mint_address = t1_mint_keypair.pubkey
+t1_account_info_json = spl_token('create-account', token1_mint_address, '--output', 'json')
+spl_token('mint', t1_mint_keypair.pubkey, '0.1')
+print('> Minted ourselves 0.1 token 1.')
 
-try:
-    t1_account_info_json = spl_token(
-        'create-account', token1_mint_address, '--output', 'json'
-    )
-except subprocess.CalledProcessError:
-    # "spl-token create-account" fails if the associated token account exists
-    # already. It would be nice to check whether it exists before we try to
-    # create it, but unfortunately there appears to be no way to get the address
-    # of the associated token account, either through the Solana RPC, or through
-    # one of the command-line tools. The associated token account address remains
-    # implicit everywhere :/
-    pass
-
-print('\nSetting up RAY-ORCA pool ...')
+print('\nSetting up pool ...')
 
 # pool accounts and transfer tokens
-pool_orca_keypair = create_test_account(f'{test_dir}/pool-orca.json', fund=False)
-pool_ray_keypair = create_test_account(f'{test_dir}/pool-ray.json', fund=False)
-spl_token('create-account', token0_mint_address, pool_orca_keypair.keypair_path)
-spl_token('create-account', token1_mint_address, pool_ray_keypair.keypair_path)
-spl_token('transfer', token0_mint_address, '0.1', pool_orca_keypair.pubkey)
-spl_token('transfer', token1_mint_address, '0.1', pool_ray_keypair.pubkey)
+pool_t0_keypair = create_test_account(f'{test_dir}/pool-t0.json', fund=False)
+pool_t1_keypair = create_test_account(f'{test_dir}/pool-t1.json', fund=False)
+spl_token('create-account', token0_mint_address, pool_t0_keypair.keypair_path)
+spl_token('create-account', token1_mint_address, pool_t1_keypair.keypair_path)
+
+spl_token('transfer', token0_mint_address, '0.1', pool_t0_keypair.pubkey)
+spl_token('transfer', token1_mint_address, '0.1', pool_t1_keypair.pubkey)
