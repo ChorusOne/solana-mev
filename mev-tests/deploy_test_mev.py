@@ -39,24 +39,23 @@ print(f'Keys directory: {test_dir}')
 # and then we know how much the deployment cost.
 sol_balance_pre = float(solana('balance').split(' ')[0])
 
-# If the Orca program exists, use that, otherwise upload it at a new address.
-amm_info = rpc_get_account_info(orca_program_id)
-if amm_info is not None:
-    print('\nFound existing instance of Orca Token Swap program.')
-    token_swap_program_id = orca_program_id
-else:
-    print('\nUploading Orca Token Swap program ...')
-    # first run: 
-    # solana program dump ORCA_PROGRAM_ID 'path/orca_token_swap_v2.so'
-    token_swap_program_id = solana_program_deploy(
-        deploy_path + '/orca_token_swap_v2.so'
-    )
+# since the validator will be started in every new test, 
+# it doesn't need to check if Orca program exist.
+# We can just deploy it anyway.
+print('\nUploading Orca Token Swap program ...')
+
+# first run: 
+# solana program dump ORCA_PROGRAM_ID 'path/orca_token_swap_v2.so'
+token_swap_program_id = solana_program_deploy(
+    deploy_path + '/orca_token_swap_v2.so'
+)
 print(f'> Token swap program id is {token_swap_program_id}')
 
 # creates token 0 and token account
 t0_mint_keypair = create_test_account(f'{test_dir}/token0-mint.json', fund=False)
 spl_token('create-token', f'{test_dir}/token0-mint.json', '--decimals', '6')
 token0_mint_address = t0_mint_keypair.pubkey
+print('> Token 0: ', t0_mint_keypair.pubkey)
 
 t0_account = create_test_account(f'{test_dir}/token0-account.json', fund=False)
 spl_token('create-account', token0_mint_address, t0_account.keypair_path, '--output', 'json')
@@ -67,6 +66,7 @@ print('> Minted ourselves 0.1 token 0.')
 t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
 spl_token('create-token', f'{test_dir}/token1-mint.json', '--decimals', '6')
 token1_mint_address = t1_mint_keypair.pubkey
+print('> Token 1: ', t1_mint_keypair.pubkey)
 
 t1_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
 spl_token('create-account', token1_mint_address, t1_account.keypair_path, '--output', 'json')
@@ -80,11 +80,14 @@ pool_t0_keypair = create_test_account(f'{test_dir}/pool-t0.json', fund=False)
 pool_t1_keypair = create_test_account(f'{test_dir}/pool-t1.json', fund=False)
 
 spl_token('create-account', token0_mint_address, pool_t0_keypair.keypair_path)
-print('created account pool_token0: ', pool_t0_keypair.pubkey)
+print('> Created account pool_token0: ', pool_t0_keypair.pubkey)
 
 spl_token('create-account', token1_mint_address, pool_t1_keypair.keypair_path)
-print('created account pool_token1: ', pool_t1_keypair.pubkey)
+print('> Created account pool_token1: ', pool_t1_keypair.pubkey)
 
 spl_token('transfer', token0_mint_address, '0.1', pool_t0_keypair.pubkey, '--from', t0_account.pubkey)
 spl_token('transfer', token1_mint_address, '0.1', pool_t1_keypair.pubkey, '--from', t1_account.pubkey)
 
+# get info to make sure transfer is working
+print(f'> Pool owns {spl_token_balance(pool_t0_keypair.pubkey).balance_ui} of {token0_mint_address}')
+print(f'> Pool owns {spl_token_balance(pool_t1_keypair.pubkey).balance_ui} of {token1_mint_address}')
