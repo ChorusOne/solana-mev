@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::path::PathBuf;
 
 use serde::Serialize;
 use solana_client::rpc_client::RpcClient;
@@ -137,7 +137,7 @@ pub fn create_token_pool(
         &token_swap_program_id,
     ));
 
-    let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
+    let (authority_pubkey, authority_bump_seed) = Pubkey::find_program_address(
         &[&token_pool_account.pubkey().to_bytes()[..]],
         &token_swap_program_id,
     );
@@ -200,7 +200,7 @@ pub fn create_token_pool(
 
     let swap_curve = SwapCurve {
         curve_type: CurveType::ConstantProduct,
-        calculator: Arc::new(ConstantProductCurve),
+        calculator: Box::new(ConstantProductCurve),
     };
 
     let initialize_pool_instruction = spl_token_swap::instruction::initialize(
@@ -213,6 +213,7 @@ pub fn create_token_pool(
         &pool_mint_pubkey,
         &pool_fee_keypair.pubkey(),
         &pool_token_keypair.pubkey(),
+        authority_bump_seed,
         fees,
         swap_curve,
     )
@@ -223,4 +224,12 @@ pub fn create_token_pool(
     TokenPool {
         address: token_pool_account.pubkey(),
     }
+}
+
+/// Resolve ~/.config/solana/id.json.
+pub fn get_default_keypair_path() -> PathBuf {
+    let home = std::env::var("HOME").expect("Expected $HOME to be set.");
+    let mut path = PathBuf::from(home);
+    path.push(".config/solana/id.json");
+    path
 }

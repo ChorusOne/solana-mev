@@ -15,6 +15,7 @@ from uuid import uuid4
 
 from util import (
     create_test_account,
+    deploy_token_pool,
     solana,
     solana_program_deploy,
     spl_token,
@@ -111,6 +112,9 @@ spl_token(
     '--from',
     t1_account.pubkey,
 )
+
+
+deploy_token_pool(token_swap_program_id, pool_t0_keypair.pubkey, pool_t1_keypair.pubkey)
 
 # get info to make sure transfer is working
 print(
