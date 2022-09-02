@@ -230,19 +230,75 @@ def rpc_get_account_info(address: str) -> Optional[Dict[str, Any]]:
     return account_info
 
 
+class TokenPool(NamedTuple):
+    token_swap_program_id: str
+    token_swap_account: str
+    token_swap_a_account: str
+    token_swap_b_account: str
+    pool_mint_account: str
+    pool_fee_account: str
+
+    def swap(
+        self,
+        token_a_client: str,
+        token_b_client: str,
+        amount: int,
+        minimum_amount_out: int,
+    ):
+        run(
+            'cargo',
+            'run',
+            '--manifest-path',
+            './mev-tests/token-swap-cli/Cargo.toml',
+            '--',
+            'swap',
+            '--token-swap-program-id',
+            self.token_swap_program_id,
+            '--token-swap-account',
+            self.token_swap_account,
+            '--token-a-client',
+            token_a_client,
+            '--token-swap-a-account',
+            self.token_swap_a_account,
+            '--token-swap-b-account',
+            self.token_swap_b_account,
+            '--token-b-client',
+            token_b_client,
+            '--pool-mint',
+            self.pool_mint_account,
+            '--pool-fee',
+            self.pool_fee_account,
+            '--amount',
+            amount,
+            '--minimum-amount-out',
+            minimum_amount_out,
+        )
+
+
 def deploy_token_pool(
-    token_swap_program_id: str, token_a_account: str, token_b_account: str
-):
-    return run(
-        'cargo',
-        'run',
-        '--manifest-path',
-        './mev-tests/token-swap-cli/Cargo.toml',
-        '--',
-        '--token-swap-program-id',
-        token_swap_program_id,
-        '--token-a-account',
-        token_a_account,
-        '--token-b-account',
-        token_b_account,
+    token_swap_program_id: str, token_swap_a_account: str, token_swap_b_account: str
+) -> TokenPool:
+    init_json = json.loads(
+        run(
+            'cargo',
+            'run',
+            '--manifest-path',
+            './mev-tests/token-swap-cli/Cargo.toml',
+            '--',
+            '--token-swap-program-id',
+            token_swap_program_id,
+            '--token-a-account',
+            token_swap_a_account,
+            '--token-b-account',
+            token_swap_b_account,
+            'init',
+        )
+    )
+    return TokenPool(
+        token_swap_program_id=token_swap_program_id,
+        token_swap_account=init_json['address'],
+        token_swap_a_account=token_swap_a_account,
+        token_swap_b_account=token_swap_b_account,
+        pool_mint_account=init_json['pool_mint'],
+        pool_fee_account=init_json['pool_fee'],
     )

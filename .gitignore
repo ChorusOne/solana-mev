@@ -32,3 +32,4 @@ log-*/
 **/cargo-*-bpf-child-script-*.sh
 
 /mev-tests/.keys
+/mev-tests/token-swap-cli/target/

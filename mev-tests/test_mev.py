@@ -114,7 +114,10 @@ spl_token(
 )
 
 
-deploy_token_pool(token_swap_program_id, pool_t0_keypair.pubkey, pool_t1_keypair.pubkey)
+token_pool = deploy_token_pool(
+    token_swap_program_id, pool_t0_keypair.pubkey, pool_t1_keypair.pubkey
+)
+print(f'> Token Pool created with address {token_pool.token_swap_account}')
 
 # get info to make sure transfer is working
 print(
