@@ -1,14 +1,17 @@
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Serialize, Serializer};
 use solana_client::rpc_client::RpcClient;
 use solana_program::{instruction::Instruction, rent::Rent, system_instruction, sysvar};
 use solana_sdk::{signature::Keypair, signer::Signer, signers::Signers, transaction::Transaction};
 use spl_token::solana_program::{program_pack::Pack, pubkey::Pubkey};
-use spl_token_swap::curve::{
-    base::{CurveType, SwapCurve},
-    constant_product::ConstantProductCurve,
-    fees::Fees,
+use spl_token_swap::{
+    curve::{
+        base::{CurveType, SwapCurve},
+        constant_product::ConstantProductCurve,
+        fees::Fees,
+    },
+    instruction::Swap,
 };
 
 pub fn get_rent(rpc_client: &RpcClient) -> Rent {
@@ -109,9 +112,18 @@ pub fn sign_and_send_transaction<T: Signers>(
     tx
 }
 
+/// Function to use when serializing a public key, to print it using base58.
+pub fn serialize_b58<S: Serializer, T: ToString>(x: &T, serializer: S) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&x.to_string())
+}
 #[derive(Serialize)]
 pub struct TokenPool {
+    #[serde(serialize_with = "serialize_b58")]
     address: Pubkey,
+    #[serde(serialize_with = "serialize_b58")]
+    pool_mint: Pubkey,
+    #[serde(serialize_with = "serialize_b58")]
+    pool_fee: Pubkey,
 }
 
 pub fn create_token_pool(
@@ -223,6 +235,8 @@ pub fn create_token_pool(
 
     TokenPool {
         address: token_pool_account.pubkey(),
+        pool_mint: pool_mint_pubkey,
+        pool_fee: pool_fee_keypair.pubkey(),
     }
 }
 
@@ -232,4 +246,46 @@ pub fn get_default_keypair_path() -> PathBuf {
     let mut path = PathBuf::from(home);
     path.push(".config/solana/id.json");
     path
+}
+
+pub fn swap_tokens(
+    rpc_client: &RpcClient,
+    signer_keypair: &Keypair,
+    token_swap_program_id: &Pubkey,
+    token_swap_account: &Pubkey,
+    token_a_client: &Pubkey,
+    token_a_account: &Pubkey,
+    token_b_account: &Pubkey,
+    token_b_client: &Pubkey,
+    pool_mint: &Pubkey,
+    pool_fee: &Pubkey,
+    amount: u64,
+    minimum_amount_out: u64,
+) {
+    let token_pool_account = Keypair::new();
+    let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
+        &[&token_pool_account.pubkey().to_bytes()[..]],
+        &token_swap_program_id,
+    );
+
+    let ix = spl_token_swap::instruction::swap(
+        token_swap_program_id,
+        &spl_token::id(),
+        token_swap_account,
+        &authority_pubkey,
+        &signer_keypair.pubkey(),
+        token_a_client,
+        token_a_account,
+        token_b_account,
+        token_b_client,
+        pool_mint,
+        pool_fee,
+        None,
+        Swap {
+            amount_in: amount,
+            minimum_amount_out,
+        },
+    )
+    .unwrap();
+    sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
 }
