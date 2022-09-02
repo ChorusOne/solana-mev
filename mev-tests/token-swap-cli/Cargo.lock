@@ -3317,9 +3317,9 @@ dependencies = [
 
 [[package]]
 name = "spl-token-swap"
-version = "3.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b803000d1167393ab203c98ed0d995367bda2ef1f12213598e126bd70a12c4c"
+checksum = "c63b79be6174568e8724912b15e62d0c6b0424ac98397e9a5a867ac2881553af"
 dependencies = [
  "arrayref",
  "enum_dispatch",
