@@ -15,14 +15,24 @@ from uuid import uuid4
 
 from util import (
     create_test_account,
-    rpc_get_account_info,
     solana,
     solana_program_deploy,
     spl_token,
+    spl_token_balance,
 )
 
-orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
-# https://solscan.io/account/9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP
+config_path = 'mev_config.toml'
+
+# Start the validator, pipe its stdout to /dev/null.
+test_validator = subprocess.Popen(
+    [
+        'solana-test-validator', '--mev-config-path', config_path
+    ],
+    stdout=subprocess.DEVNULL,
+    # Somehow, CI only works if `shell=True`, so this argument is left here on
+    # purpose.
+    shell=True,
+)
 
 # replace to use ENV vars
 s_dir = os.getcwd()
