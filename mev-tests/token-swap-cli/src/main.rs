@@ -4,21 +4,21 @@ use clap::Parser;
 use solana_client::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{commitment_config::CommitmentConfig, signature::read_keypair_file};
-use utils::create_token_pool;
+use utils::{create_token_pool, get_default_keypair_path};
 
 mod utils;
 
 #[derive(Parser, Debug)]
 pub struct Opts {
     /// URL of cluster to connect to (e.g., https://api.devnet.solana.com for solana devnet)
-    #[clap(long, default_value = "https://api.mainnet-beta.solana.com")]
+    #[clap(long, default_value = "http://localhost:8899")]
     cluster: String,
 
     #[clap(long)]
     token_swap_program_id: Pubkey,
 
-    #[clap(long, default_value = "~/.config/solana/id.json")]
-    signer_path: PathBuf,
+    #[clap(long)]
+    signer_path: Option<PathBuf>,
 
     #[clap(long)]
     token_a_account: Pubkey,
@@ -45,6 +45,7 @@ pub struct Opts {
 
 fn main() {
     let opts = Opts::parse();
+    let signer_path = opts.signer_path.unwrap_or(get_default_keypair_path());
     let rpc_client =
         RpcClient::new_with_commitment(opts.cluster.clone(), CommitmentConfig::confirmed());
 
@@ -59,7 +60,7 @@ fn main() {
         host_fee_denominator: opts.host_fee_denominator,
     };
 
-    let signer_keypair = read_keypair_file(opts.signer_path).unwrap();
+    let signer_keypair = read_keypair_file(signer_path).unwrap();
 
     let token_pool = create_token_pool(
         &rpc_client,

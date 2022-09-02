@@ -228,3 +228,21 @@ def rpc_get_account_info(address: str) -> Optional[Dict[str, Any]]:
     # account does not exist.
     account_info: Optional[Dict[str, Any]] = result['result']['value']
     return account_info
+
+
+def deploy_token_pool(
+    token_swap_program_id: str, token_a_account: str, token_b_account: str
+):
+    return run(
+        'cargo',
+        'run',
+        '--manifest-path',
+        './mev-tests/token-swap-cli/Cargo.toml',
+        '--',
+        '--token-swap-program-id',
+        token_swap_program_id,
+        '--token-a-account',
+        token_a_account,
+        '--token-b-account',
+        token_b_account,
+    )
