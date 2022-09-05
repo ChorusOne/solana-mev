@@ -9,8 +9,6 @@ and arb opportunities.
 """
 
 import os
-import time
-import subprocess
 import toml
 
 from uuid import uuid4
@@ -22,9 +20,6 @@ from util import (
     solana_program_deploy,
     spl_token,
     spl_token_balance,
-)
-
-from test_start_validator import (
     start_validator,
     restart_validator,
 )

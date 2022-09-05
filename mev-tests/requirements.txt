@@ -1,0 +1,5 @@
+certifi==2022.6.15
+pip==22.1.2
+setuptools==63.4.1
+toml==0.10.2
+wheel==0.37.1
