@@ -9,7 +9,9 @@ and arb opportunities.
 """
 
 import os
+import time
 import subprocess
+import toml
 
 from uuid import uuid4
 
@@ -22,20 +24,22 @@ from util import (
     spl_token_balance,
 )
 
-config_path = 'mev_config.toml'
-
-# Start the validator, pipe its stdout to /dev/null.
-test_validator = subprocess.Popen(
-    ['solana-test-validator', '--mev-config-path', config_path],
-    stdout=subprocess.DEVNULL,
-    # Somehow, CI only works if `shell=True`, so this argument is left here on
-    # purpose.
-    shell=True,
+from test_start_validator import (
+    start_validator,
+    restart_validator,
 )
+
 
 # replace to use ENV vars
 s_dir = os.getcwd()
 deploy_path = s_dir + '/mev-tests/target/deploy'
+
+# validator config filename
+config_file = 'mev-tests/mev_config.toml'
+
+# Start the validator, pipe its stdout to /dev/null.
+test_validator = start_validator()
+
 
 # Create a fresh directory where we store all the keys and configuration for this
 # deployment.
@@ -70,6 +74,7 @@ spl_token(
 )
 spl_token('mint', t0_mint_keypair.pubkey, '0.1', t0_account.pubkey)
 print('> Minted ourselves 0.1 token 0.')
+
 
 # creates token 1 and token account
 t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
@@ -114,11 +119,6 @@ spl_token(
 )
 
 
-token_pool = deploy_token_pool(
-    token_swap_program_id, pool_t0_keypair.pubkey, pool_t1_keypair.pubkey
-)
-print(f'> Token Pool created with address {token_pool.token_swap_account}')
-
 # get info to make sure transfer is working
 print(
     f'> Pool owns {spl_token_balance(pool_t0_keypair.pubkey).balance_ui} of {token0_mint_address}'
@@ -126,3 +126,37 @@ print(
 print(
     f'> Pool owns {spl_token_balance(pool_t1_keypair.pubkey).balance_ui} of {token1_mint_address}'
 )
+
+
+# create pool address
+token_pool = deploy_token_pool(
+    token_swap_program_id, pool_t0_keypair.pubkey, pool_t1_keypair.pubkey
+)
+print(f'> Token Pool created with address {token_pool.token_swap_account}')
+
+## create toml file
+d_data = {
+    'log_path': '/tmp/mev.log',
+    'program_id': token_swap_program_id,
+    'orca_account': {
+        '_id': 'T0/T1',
+        'address': token_pool.token_swap_account,
+        'pool_a_account': pool_t0_keypair.pubkey,
+        'pool_b_account': pool_t1_keypair.pubkey,
+    },
+}
+
+with open(config_file, 'w+') as f:
+    toml.dump(d_data, f)
+
+## will stop and re-start validator with toml file
+restart_validator(test_validator, config_file)
+
+
+# create new  *user* account and mint some token0
+
+
+# swap token0 for token1
+
+
+# check log is working for swaps
