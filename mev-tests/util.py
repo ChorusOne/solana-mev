@@ -7,6 +7,7 @@ Utilities that help writing tests, mainly for invoking programs.
 
 import json
 import os.path
+import time
 import subprocess
 import sys
 
@@ -302,3 +303,50 @@ def deploy_token_pool(
         pool_mint_account=init_json['pool_mint'],
         pool_fee_account=init_json['pool_fee'],
     )
+
+
+def start_validator():
+    """
+    Start the validator, pipe its stdout to /dev/null.
+    """
+    test_validator = subprocess.Popen(
+        ['solana-test-validator'],
+        stdout=subprocess.DEVNULL,
+        # Somehow, CI only works if `shell=True`, so this argument is left here on
+        # purpose.
+        shell=True,
+    )
+
+    return test_validator
+
+
+def start_validator_config(config_path='config.toml'):
+    """
+    Start the validator with a .toml config file, pipe its stdout to /dev/null.
+    """
+    test_validator = subprocess.Popen(
+        ['solana-test-validator', '--mev-config-path', config_path],
+        stdout=subprocess.DEVNULL,
+        # Somehow, CI only works if `shell=True`, so this argument is left here on
+        # purpose.
+        shell=True,
+    )
+
+    return test_validator
+
+
+def restart_validator(test_validator, config_file=None):
+    """
+    Stops a running validator and re-start keeping the ledger
+    """
+    test_validator.terminate()
+    sleep_seconds = 2
+    if not test_validator.poll():
+        time.sleep(sleep_seconds)
+
+    ## restart validator with toml file
+    if config_file is not None:
+        new_validator = start_validator_config(config_file)
+    else:
+        new_validator = start_validator()
+    return new_validator
