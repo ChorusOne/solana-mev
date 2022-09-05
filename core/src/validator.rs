@@ -1090,6 +1090,12 @@ impl Validator {
     }
 
     pub fn join(self) {
+        if let Some(ref mev_log) = self.mev_log {
+            mev_log
+                .log_send_channel
+                .send(MevMsg::Exit)
+                .expect("MEV failed to send msg to exit");
+        }
         drop(self.bank_forks);
         drop(self.cluster_info);
 
@@ -1176,10 +1182,6 @@ impl Validator {
             geyser_plugin_service.join().expect("geyser_plugin_service");
         }
         if let Some(mev_log) = self.mev_log {
-            mev_log
-                .log_send_channel
-                .send(MevMsg::Exit)
-                .expect("MEV failed to send msg to exit");
             mev_log
                 .thread_handle
                 .join()
