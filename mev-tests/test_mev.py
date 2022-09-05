@@ -9,6 +9,7 @@ and arb opportunities.
 """
 
 import os
+from typing import Optional
 import toml
 
 from uuid import uuid4
@@ -145,7 +146,7 @@ with open(config_file, 'w+') as f:
     toml.dump(d_data, f)
 
 ## will stop and re-start validator with toml file
-restart_validator(test_validator, config_file)
+test_validator = restart_validator(test_validator, config_file)
 
 
 # create new  *user* account and mint some token0
@@ -155,3 +156,5 @@ restart_validator(test_validator, config_file)
 
 
 # check log is working for swaps
+
+test_validator.terminate()

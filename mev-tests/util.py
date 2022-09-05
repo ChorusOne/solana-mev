@@ -316,7 +316,7 @@ def start_validator():
         # purpose.
         shell=True,
     )
-
+    wait_validator()
     return test_validator
 
 
@@ -331,7 +331,7 @@ def start_validator_config(config_path='config.toml'):
         # purpose.
         shell=True,
     )
-
+    wait_validator()
     return test_validator
 
 
@@ -349,4 +349,26 @@ def restart_validator(test_validator, config_file=None):
         new_validator = start_validator_config(config_file)
     else:
         new_validator = start_validator()
+    wait_validator()
     return new_validator
+
+
+def wait_validator():
+    last_observed_block_height: Optional[int] = None
+    for _ in range(60):
+        result = subprocess.run(
+            ['solana', '--url', 'http://127.0.0.1:8899', 'block-height'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode == 0:
+            current_block_height = int(result.stdout)
+            if (
+                last_observed_block_height is not None
+                and current_block_height > last_observed_block_height
+            ):
+                break
+            last_observed_block_height = current_block_height
+
+        sleep_seconds = 1
+        time.sleep(sleep_seconds)
