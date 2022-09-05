@@ -270,9 +270,9 @@ class TokenPool(NamedTuple):
             '--pool-fee',
             self.pool_fee_account,
             '--amount',
-            amount,
+            str(amount),
             '--minimum-amount-out',
-            minimum_amount_out,
+            str(minimum_amount_out),
         )
 
 
