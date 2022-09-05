@@ -14,7 +14,7 @@ import sys
 from urllib import request
 from uuid import uuid4
 
-from typing import List, NamedTuple, Any, Optional, Callable, Dict, Tuple
+from typing import List, NamedTuple, Any, Optional, Dict
 
 
 class TestAccount(NamedTuple):
