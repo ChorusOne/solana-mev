@@ -245,7 +245,7 @@ class TokenPool(NamedTuple):
         token_b_client: str,
         amount: int,
         minimum_amount_out: int,
-    ):
+    ) -> None:
         run(
             'cargo',
             'run',
@@ -305,12 +305,15 @@ def deploy_token_pool(
     )
 
 
-def start_validator():
+def start_validator(config_path: Optional[str] = None) -> subprocess.Popen[bytes]:
     """
-    Start the validator, pipe its stdout to /dev/null.
+    Start the validator with an optional .toml config file, pipe its stdout to /dev/null.
     """
+    cmds = ['solana-test-validator']
+    if config_path is not None:
+        cmds += ['--mev-config-path', config_path]
     test_validator = subprocess.Popen(
-        ['solana-test-validator'],
+        cmds,
         stdout=subprocess.DEVNULL,
         # Somehow, CI only works if `shell=True`, so this argument is left here on
         # purpose.
@@ -320,22 +323,9 @@ def start_validator():
     return test_validator
 
 
-def start_validator_config(config_path='config.toml'):
-    """
-    Start the validator with a .toml config file, pipe its stdout to /dev/null.
-    """
-    test_validator = subprocess.Popen(
-        ['solana-test-validator', '--mev-config-path', config_path],
-        stdout=subprocess.DEVNULL,
-        # Somehow, CI only works if `shell=True`, so this argument is left here on
-        # purpose.
-        shell=True,
-    )
-    wait_validator()
-    return test_validator
-
-
-def restart_validator(test_validator, config_file=None):
+def restart_validator(
+    test_validator: subprocess.Popen[bytes], config_file: Optional[str] = None
+) -> subprocess.Popen[bytes]:
     """
     Stops a running validator and re-start keeping the ledger
     """
@@ -345,15 +335,12 @@ def restart_validator(test_validator, config_file=None):
         time.sleep(sleep_seconds)
 
     ## restart validator with toml file
-    if config_file is not None:
-        new_validator = start_validator_config(config_file)
-    else:
-        new_validator = start_validator()
+    new_validator = start_validator(config_path=config_file)
     wait_validator()
     return new_validator
 
 
-def wait_validator():
+def wait_validator() -> None:
     last_observed_block_height: Optional[int] = None
     for _ in range(60):
         result = subprocess.run(
