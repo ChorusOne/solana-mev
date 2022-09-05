@@ -146,7 +146,7 @@ with open(config_file, 'w+') as f:
     toml.dump(d_data, f)
 
 ## will stop and re-start validator with toml file
-test_validator = restart_validator(test_validator, config_file)
+test_validator = restart_validator(test_validator, config_file=config_file)
 
 
 # create new  *user* account and mint some token0
