@@ -23,9 +23,9 @@ pub struct Opts {
     signer_path: Option<PathBuf>,
 
     #[clap(long)]
-    token_a_account: Pubkey,
+    token_swap_a_account: Pubkey,
     #[clap(long)]
-    token_b_account: Pubkey,
+    token_swap_b_account: Pubkey,
 
     #[clap(subcommand)]
     subcommand: OptSubcommand,
@@ -54,15 +54,9 @@ struct InitializeTokenSwap {
 #[derive(Parser, Debug)]
 struct SwapTokens {
     #[clap(long)]
-    token_swap_program_id: Pubkey,
-    #[clap(long)]
     token_swap_account: Pubkey,
     #[clap(long)]
     token_a_client: Pubkey,
-    #[clap(long)]
-    token_swap_a_account: Pubkey,
-    #[clap(long)]
-    token_swap_b_account: Pubkey,
     #[clap(long)]
     token_b_client: Pubkey,
     #[clap(long)]
@@ -105,8 +99,8 @@ fn main() {
                 &rpc_client,
                 &signer_keypair,
                 &opts.token_swap_program_id,
-                &opts.token_a_account,
-                &opts.token_b_account,
+                &opts.token_swap_a_account,
+                &opts.token_swap_b_account,
                 fees,
             );
             println!("{}", serde_json::to_string(&token_pool).unwrap());
@@ -115,11 +109,11 @@ fn main() {
             swap_tokens(
                 &rpc_client,
                 &signer_keypair,
-                &swap_opts.token_swap_program_id,
+                &opts.token_swap_program_id,
                 &swap_opts.token_swap_account,
                 &swap_opts.token_a_client,
-                &swap_opts.token_swap_a_account,
-                &swap_opts.token_swap_b_account,
+                &opts.token_swap_a_account,
+                &opts.token_swap_b_account,
                 &swap_opts.token_b_client,
                 &swap_opts.pool_mint,
                 &swap_opts.pool_fee,
