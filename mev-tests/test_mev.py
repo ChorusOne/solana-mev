@@ -8,7 +8,7 @@ Set up a Orca instance on local testnet and test logging tx,
 and arb opportunities. 
 """
 
-import os
+import sys, os
 from typing import Optional
 import toml
 
@@ -68,7 +68,7 @@ t0_account = create_test_account(f'{test_dir}/token0-account.json', fund=False)
 spl_token(
     'create-account', token0_mint_address, t0_account.keypair_path, '--output', 'json'
 )
-spl_token('mint', t0_mint_keypair.pubkey, '0.1', t0_account.pubkey)
+spl_token('mint', t0_mint_keypair.pubkey, '1.1', t0_account.pubkey)
 print('> Minted ourselves 0.1 token 0.')
 
 
@@ -82,7 +82,7 @@ t1_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
 spl_token(
     'create-account', token1_mint_address, t1_account.keypair_path, '--output', 'json'
 )
-spl_token('mint', t1_mint_keypair.pubkey, '0.1', t1_account.pubkey)
+spl_token('mint', t1_mint_keypair.pubkey, '1.1', t1_account.pubkey)
 print('> Minted ourselves 0.1 token 1.')
 
 print('\nSetting up pool ...')
@@ -100,7 +100,7 @@ print('> Created account pool_token1: ', pool_t1_keypair.pubkey)
 spl_token(
     'transfer',
     token0_mint_address,
-    '0.1',
+    '1.1',
     pool_t0_keypair.pubkey,
     '--from',
     t0_account.pubkey,
@@ -108,7 +108,7 @@ spl_token(
 spl_token(
     'transfer',
     token1_mint_address,
-    '0.1',
+    '1.1',
     pool_t1_keypair.pubkey,
     '--from',
     t1_account.pubkey,
@@ -148,12 +148,34 @@ with open(config_file, 'w+') as f:
 ## will stop and re-start validator with toml file
 test_validator = restart_validator(test_validator, config_file=config_file)
 
-
 # create new  *user* account and mint some token0
+amount_in = 0.3 * 10**9
 
+token_in = token0_mint_address
+user_keypair = create_test_account(f'{test_dir}/user.json', fund=False)
 
-# swap token0 for token1
+spl_token('create-account', token_in, user_keypair.keypair_path)
+print('> Created user account for holding the Token in: ', user_keypair.pubkey)
 
+## mint token to user wallet
+spl_token('mint', t0_mint_keypair.pubkey, str(amount_in), t0_account.pubkey)
+print(f'> Minted ourselves {str(amount_in)} token {token_in}')
+
+## swap token in
+if token_in == token0_mint_address:
+    token_out = token1_mint_address
+elif token_in == token1_mint_address:
+    token_out = token0_mint_address
+else:
+    print("Invalid Token in")
+    sys.exit()
+
+token_pool.swap(
+    token_a_client=token_in,
+    token_b_client=token_out,
+    amount=int(amount_in),
+    minimum_amount_out=int(100),
+)
 
 # check log is working for swaps
 
