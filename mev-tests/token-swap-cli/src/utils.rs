@@ -262,9 +262,8 @@ pub fn swap_tokens(
     amount: u64,
     minimum_amount_out: u64,
 ) {
-    let token_pool_account = Keypair::new();
     let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
-        &[&token_pool_account.pubkey().to_bytes()[..]],
+        &[&token_swap_account.to_bytes()[..]],
         &token_swap_program_id,
     );
 
