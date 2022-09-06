@@ -144,9 +144,6 @@ impl Mev {
         loaded_transaction
             .mev_accounts.iter()
             .map(|s| {
-                // This should never overflow, we are the ones that construct
-                // `loaded_transaction.mev_accounts` and we should ensure the
-                // data is organized in triplets so we can later reconstruct it.
                 let [
                     (pool_key, pool_account),
                     (pool_a_key, pool_a_account),
