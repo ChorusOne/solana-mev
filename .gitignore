@@ -33,3 +33,5 @@ log-*/
 
 /mev-tests/.keys
 /mev-tests/token-swap-cli/target/
+# generated when running - no need to be in repo
+/mev-tests/mev_config.toml

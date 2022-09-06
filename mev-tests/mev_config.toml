@@ -1,8 +1,0 @@
-log_path = "/tmp/mev.log"
-program_id = "321Bq2X8NYwUH7ZsPvQsytv66gFoeCWdg84ggKQMCUAc"
-
-[orca_accounts]
-pool_id = "T0/T1"
-address = "845aHouw8JJ7tkav4fsUyMBaitQj2uBZTwKfXxCVmmvd"
-pool_a_account = "7gT3co4VMJVWCmYZLV6JfV7brxFeJNySLUpezuZB26pJ"
-pool_b_account = "DE4y3rP64usYYk1j5ZreiSY2BxSS9aqDCkDuCGKLuSDx"
