@@ -121,8 +121,9 @@ impl Mev {
     pub fn fill_tx_mev_accounts(&self, transaction: &mut SanitizedTransaction) {
         if transaction
             .message()
-            .program_instructions_iter()
-            .any(|(program_id, _compiled_ix)| &self.orca_program == program_id)
+            .account_keys()
+            .iter()
+            .any(|account_key| &self.orca_program == account_key)
         {
             for orca_pool in self.orca_interesting_accounts.0.iter() {
                 transaction.mev_keys.push([
