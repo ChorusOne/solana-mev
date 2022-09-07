@@ -133,13 +133,15 @@ print(f'> Token Pool created with address {token_pool.token_swap_account}')
 ## create toml file
 d_data = {
     'log_path': '/tmp/mev.log',
-    'program_id': token_swap_program_id,
-    'orca_account': {
-        '_id': 'T0/T1',
-        'address': token_pool.token_swap_account,
-        'pool_a_account': pool_t0_keypair.pubkey,
-        'pool_b_account': pool_t1_keypair.pubkey,
-    },
+    'orca_program_id': token_swap_program_id,
+    'orca_account': [
+        {
+            '_id': 'T0/T1',
+            'address': token_pool.token_swap_account,
+            'pool_a_account': pool_t0_keypair.pubkey,
+            'pool_b_account': pool_t1_keypair.pubkey,
+        }
+    ],
 }
 
 with open(config_file, 'w+') as f:
