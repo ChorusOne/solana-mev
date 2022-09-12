@@ -316,8 +316,9 @@ def start_validator(config_path: Optional[str] = None) -> subprocess.Popen[bytes
         cmds,
         stdout=subprocess.DEVNULL,
         # Somehow, CI only works if `shell=True`, so this argument is left here on
-        # purpose.
-        shell=True,
+        # purpose. This doesn't capture arguments (or paths, need to investigate),
+        # For now, we'll keep it commented.
+        # shell=True,
     )
     wait_validator()
     return test_validator
