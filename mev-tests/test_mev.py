@@ -150,7 +150,9 @@ with open(config_file, 'w+') as f:
 ## will stop and re-start validator with toml file
 test_validator = restart_validator(test_validator, config_file=config_file)
 
+print(f'Swapping tokens ...')
 
+print(f'> Swapping directly')
 token_pool.swap(
     token_a_client=t0_account.pubkey,
     token_b_client=t1_account.pubkey,
@@ -159,5 +161,21 @@ token_pool.swap(
 )
 
 # check log is working for swaps
+
+print('> Uploading inner token swap program ...')
+inner_swap_deploy_path = s_dir + '/mev-tests/helper-programs/target/deploy'
+inner_token_swap_program_id = solana_program_deploy(
+    inner_swap_deploy_path + '/inner_swap.so'
+)
+print(f'> Inner token swap program id is {inner_token_swap_program_id}')
+
+print('> Swapping with an inner program')
+token_pool.inner_swap(
+    inner_program=inner_token_swap_program_id,
+    token_a_client=t0_account.pubkey,
+    token_b_client=t1_account.pubkey,
+    amount=100,
+    minimum_amount_out=0,
+)
 
 test_validator.terminate()

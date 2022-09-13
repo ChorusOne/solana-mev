@@ -1429,6 +1429,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "inner-swap"
+version = "0.0.1"
+dependencies = [
+ "borsh 0.9.3",
+ "solana-program",
+ "spl-token",
+ "spl-token-swap",
+]
+
+[[package]]
 name = "inout"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3526,6 +3536,7 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "clap 3.2.19",
+ "inner-swap",
  "serde",
  "serde_json",
  "solana-client",
