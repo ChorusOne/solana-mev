@@ -32,7 +32,7 @@ pub struct SanitizedTransaction {
     message_hash: Hash,
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
-    // Store MEV interesting accounts to be loaded.
+    // Store MEV monitored accounts to be loaded.
     pub mev_keys: Vec<[Pubkey; 3]>,
 }
 
