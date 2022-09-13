@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use solana_client::rpc_client::RpcClient;
 use solana_program::pubkey::Pubkey;
 use solana_sdk::{commitment_config::CommitmentConfig, signature::read_keypair_file};
-use utils::{create_token_pool, get_default_keypair_path};
+use utils::{create_token_pool, get_default_keypair_path, inner_swap};
 
 use crate::utils::swap_tokens;
 
@@ -69,10 +69,31 @@ struct SwapTokens {
     minimum_amount_out: u64,
 }
 
+#[derive(Parser, Debug)]
+struct InnerSwap {
+    #[clap(long)]
+    caller_account: Pubkey,
+    #[clap(long)]
+    token_swap_account: Pubkey,
+    #[clap(long)]
+    token_a_client: Pubkey,
+    #[clap(long)]
+    token_b_client: Pubkey,
+    #[clap(long)]
+    pool_mint: Pubkey,
+    #[clap(long)]
+    pool_fee: Pubkey,
+    #[clap(long)]
+    amount: u64,
+    #[clap(long)]
+    minimum_amount_out: u64,
+}
+
 #[derive(Debug, Subcommand)]
 enum OptSubcommand {
     Init(InitializeTokenSwap),
     Swap(SwapTokens),
+    InnerSwap(InnerSwap),
 }
 
 fn main() {
@@ -121,5 +142,20 @@ fn main() {
                 swap_opts.minimum_amount_out,
             );
         }
+        OptSubcommand::InnerSwap(inner_swap_opts) => inner_swap(
+            &rpc_client,
+            &signer_keypair,
+            &inner_swap_opts.caller_account,
+            &opts.token_swap_program_id,
+            &inner_swap_opts.token_swap_account,
+            &inner_swap_opts.token_a_client,
+            &opts.token_swap_a_account,
+            &opts.token_swap_b_account,
+            &inner_swap_opts.token_b_client,
+            &inner_swap_opts.pool_mint,
+            &inner_swap_opts.pool_fee,
+            inner_swap_opts.amount,
+            inner_swap_opts.minimum_amount_out,
+        ),
     }
 }
