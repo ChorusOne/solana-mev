@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "token-swap-cli",
+    "inner-swap-program",
+]

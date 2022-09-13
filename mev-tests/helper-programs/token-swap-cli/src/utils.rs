@@ -288,3 +288,43 @@ pub fn swap_tokens(
     .unwrap();
     sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
 }
+
+pub fn inner_swap(
+    rpc_client: &RpcClient,
+    signer_keypair: &Keypair,
+    caller_swap_program_id: &Pubkey,
+    token_swap_program_id: &Pubkey,
+    token_swap_account: &Pubkey,
+    token_a_client: &Pubkey,
+    token_a_account: &Pubkey,
+    token_b_account: &Pubkey,
+    token_b_client: &Pubkey,
+    pool_mint: &Pubkey,
+    pool_fee: &Pubkey,
+    amount: u64,
+    minimum_amount_out: u64,
+) {
+    let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
+        &[&token_swap_account.to_bytes()[..]],
+        &token_swap_program_id,
+    );
+
+    let ix = inner_swap::inner_swap(
+        caller_swap_program_id,
+        token_swap_program_id,
+        &spl_token::id(),
+        token_swap_account,
+        &authority_pubkey,
+        &signer_keypair.pubkey(),
+        token_a_client,
+        token_a_account,
+        token_b_account,
+        token_b_client,
+        pool_mint,
+        pool_fee,
+        amount,
+        minimum_amount_out,
+    )
+    .unwrap();
+    sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
+}
