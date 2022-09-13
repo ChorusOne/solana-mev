@@ -192,6 +192,11 @@ impl Mev {
         slot: Slot,
         pre_tx_pool_state: PoolState,
     ) -> Option<()> {
+        log::info!(
+            "Logging transaction with hash {} at slot {}",
+            tx.message_hash(),
+            slot
+        );
         let post_tx_pool_state = self
             .get_all_orca_interesting_accounts(loaded_transaction)
             .ok()?;
