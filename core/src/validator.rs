@@ -499,7 +499,9 @@ impl Validator {
 
         let (mev_log, mev) = match &config.mev_config_path {
             Some(config_path) => {
+                info!("MEV enabled with config path: {:?}", config_path);
                 let mev_config = get_mev_config_file(config_path);
+                info!("Matching Orca program id: {}", mev_config.orca_program_id);
                 let mev_log = MevLog::new(&mev_config);
                 let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
                 (Some(mev_log), Some(mev))
