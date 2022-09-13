@@ -36,7 +36,7 @@ pub struct Mev {
     // These public keys are going to be loaded so we can ensure no other thread
     // modifies the data we are interested in.
     // TODO: Change this to pairs we are willing to trade on.
-    pub orca_interesting_accounts: Arc<AllOrcaPoolAddresses>,
+    pub orca_monitored_accounts: Arc<AllOrcaPoolAddresses>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -112,21 +112,17 @@ impl Mev {
         Mev {
             log_send_channel,
             orca_program: config.orca_program_id,
-            orca_interesting_accounts: Arc::new(config.orca_accounts),
+            orca_monitored_accounts: Arc::new(config.orca_accounts),
         }
     }
 
     /// Fill the field of `transaction.mev_accounts` with accounts we are
     /// interested in watching.
-    pub fn fill_tx_mev_accounts(&self, transaction: &mut SanitizedTransaction) {
-        if transaction
-            .message()
-            .account_keys()
-            .iter()
-            .any(|account_key| &self.orca_program == account_key)
-        {
-            for orca_pool in self.orca_interesting_accounts.0.iter() {
-                transaction.mev_keys.push([
+    pub fn fill_tx_mev_accounts(&self, tx: &mut SanitizedTransaction) {
+        if self.is_monitored_account(tx) {
+            log::info!("Filling tx {} with MEV accounts", tx.message_hash());
+            for orca_pool in self.orca_monitored_accounts.0.iter() {
+                tx.mev_keys.push([
                     orca_pool.address,
                     orca_pool.pool_a_account,
                     orca_pool.pool_b_account,
@@ -137,7 +133,7 @@ impl Mev {
 
     /// Attempts to deserialize the Orca accounts MEV is interested in,
     /// in case the deserialization fails for some reason, returns the error.
-    fn get_all_orca_interesting_accounts(
+    fn get_all_orca_monitored_accounts(
         &self,
         loaded_transaction: &LoadedTransaction,
     ) -> Result<Vec<OrcaPoolWithBalance>, ProgramError> {
@@ -168,19 +164,24 @@ impl Mev {
             .collect()
     }
 
+    pub fn is_monitored_account(&self, tx: &SanitizedTransaction) -> bool {
+        tx.message()
+            .account_keys()
+            .iter()
+            .any(|account_key| &self.orca_program == account_key)
+    }
+
     pub fn get_pre_tx_pool_state(
         &self,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
     ) -> Option<PoolState> {
-        for addr in tx.message().account_keys().iter() {
-            if addr == &self.orca_program {
-                return self
-                    .get_all_orca_interesting_accounts(loaded_transaction)
-                    .ok();
-            }
+        if !tx.mev_keys.is_empty() {
+            self.get_all_orca_monitored_accounts(loaded_transaction)
+                .ok()
+        } else {
+            None
         }
-        None
     }
 
     /// Execute and log the pool state after a transaction interacted with one or more
@@ -198,7 +199,7 @@ impl Mev {
             slot
         );
         let post_tx_pool_state = self
-            .get_all_orca_interesting_accounts(loaded_transaction)
+            .get_all_orca_monitored_accounts(loaded_transaction)
             .ok()?;
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolState {
             transaction_hash: *tx.message_hash(),
