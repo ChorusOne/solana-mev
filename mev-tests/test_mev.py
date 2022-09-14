@@ -23,6 +23,7 @@ from util import (
     spl_token_balance,
     start_validator,
     restart_validator,
+    compile_bpf_program,
 )
 
 
@@ -162,11 +163,16 @@ token_pool.swap(
 
 # check log is working for swaps
 
-print('> Uploading inner token swap program ...')
-inner_swap_deploy_path = s_dir + '/mev-tests/helper-programs/target/deploy'
-inner_token_swap_program_id = solana_program_deploy(
-    inner_swap_deploy_path + '/inner_swap.so'
+print('> Compiling the BPF program to swap with an inner program')
+compile_bpf_program(
+    cargo_manifest=s_dir + '/mev-tests/helper-programs/inner-swap-program/Cargo.toml'
 )
+print('> Uploading inner token swap program ...')
+
+inner_swap_deploy_path = (
+    s_dir + '/mev-tests/helper-programs/target/deploy/inner_swap.so'
+)
+inner_token_swap_program_id = solana_program_deploy(inner_swap_deploy_path)
 print(f'> Inner token swap program id is {inner_token_swap_program_id}')
 
 print('> Swapping with an inner program')
