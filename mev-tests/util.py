@@ -399,3 +399,12 @@ def wait_validator() -> None:
 
         sleep_seconds = 1
         time.sleep(sleep_seconds)
+
+
+def compile_bpf_program(cargo_manifest: str) -> None:
+    run(
+        'cargo',
+        'build-bpf',
+        '--manifest-path',
+        cargo_manifest,
+    )
