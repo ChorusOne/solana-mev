@@ -1988,6 +1988,7 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
         accounts_data_size_initial: u64,
+        mev: Option<Mev>,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -2052,7 +2053,7 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev: new(),
+            mev,
         };
         bank.finish_init(
             genesis_config,
