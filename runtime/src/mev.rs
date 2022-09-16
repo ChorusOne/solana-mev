@@ -120,7 +120,6 @@ impl Mev {
     /// interested in watching.
     pub fn fill_tx_mev_accounts(&self, tx: &mut SanitizedTransaction) {
         if self.is_monitored_account(tx) {
-            log::info!("Filling tx {} with MEV accounts", tx.message_hash());
             for orca_pool in self.orca_monitored_accounts.0.iter() {
                 tx.mev_keys.push([
                     orca_pool.address,
@@ -193,11 +192,6 @@ impl Mev {
         slot: Slot,
         pre_tx_pool_state: PoolState,
     ) -> Option<()> {
-        log::info!(
-            "Logging transaction with hash {} at slot {}",
-            tx.message_hash(),
-            slot
-        );
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)
             .ok()?;
