@@ -1,6 +1,8 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! multi-stage transaction processing pipeline in software.
 
+use solana_runtime::mev::Mev;
+
 use {
     crate::{
         banking_stage::BankingStage,
@@ -74,6 +76,7 @@ impl Tpu {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        mev: Option<&Mev>,
         entry_receiver: Receiver<WorkingBankEntry>,
         retransmit_slots_receiver: RetransmitSlotsReceiver,
         sockets: TpuSockets,
@@ -221,6 +224,7 @@ impl Tpu {
         let banking_stage = BankingStage::new(
             cluster_info,
             poh_recorder,
+            mev,
             verified_receiver,
             verified_tpu_vote_packets_receiver,
             verified_gossip_vote_packets_receiver,

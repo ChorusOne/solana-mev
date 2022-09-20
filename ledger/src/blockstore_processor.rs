@@ -1,5 +1,3 @@
-use solana_runtime::mev::Mev;
-
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -156,6 +154,7 @@ fn execute_batch(
         transaction_status_sender.is_some(),
         timings,
         log_messages_bytes_limit,
+        None,
     );
 
     bank_utils::find_and_send_votes(
@@ -644,7 +643,6 @@ pub fn test_process_blockstore(
         opts,
         None,
         None,
-        None,
     );
     process_blockstore_from_root(
         blockstore,
@@ -666,7 +664,6 @@ pub(crate) fn process_blockstore_for_bank_0(
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> Arc<RwLock<BankForks>> {
     // Setup bank for slot 0
     let mut bank0 = Bank::new_with_paths(
@@ -680,7 +677,6 @@ pub(crate) fn process_blockstore_for_bank_0(
         false,
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
-        mev,
     );
     bank0.set_compute_budget(opts.runtime_config.compute_budget);
     let bank_forks = Arc::new(RwLock::new(BankForks::new(bank0)));
