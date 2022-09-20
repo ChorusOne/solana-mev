@@ -355,9 +355,9 @@ pub struct Validator {
     snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<RwLock<PohRecorder>>,
     poh_service: PohService,
+    mev_log: Option<MevLog>,
     tpu: Tpu,
     tvu: Tvu,
-    mev_log: Option<MevLog>,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
     pub cluster_info: Arc<ClusterInfo>,
     pub bank_forks: Arc<RwLock<BankForks>>,
@@ -574,7 +574,6 @@ impl Validator {
             accounts_update_notifier,
             transaction_notifier,
             Some(poh_timing_point_sender.clone()),
-            mev,
         );
 
         node.info.wallclock = timestamp();
@@ -1044,6 +1043,7 @@ impl Validator {
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
+            mev.as_ref(),
             entry_receiver,
             retransmit_slots_receiver,
             TpuSockets {
@@ -1100,9 +1100,9 @@ impl Validator {
             poh_timing_report_service,
             snapshot_packager_service,
             completed_data_sets_service,
+            mev_log,
             tpu,
             tvu,
-            mev_log,
             poh_service,
             poh_recorder,
             ip_echo_server,
@@ -1408,7 +1408,6 @@ fn load_blockstore(
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
     poh_timing_point_sender: Option<PohTimingSender>,
-    mev: Option<Mev>,
 ) -> (
     GenesisConfig,
     Arc<RwLock<BankForks>>,
@@ -1519,7 +1518,6 @@ fn load_blockstore(
                 .cache_block_meta_sender
                 .as_ref(),
             accounts_update_notifier,
-            mev,
         );
 
     // Before replay starts, set the callbacks in each of the banks in BankForks so that

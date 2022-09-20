@@ -1,5 +1,3 @@
-use solana_runtime::mev::Mev;
-
 use {
     crate::{
         blockstore::Blockstore,
@@ -52,7 +50,6 @@ pub fn load(
     transaction_status_sender: Option<&TransactionStatusSender>,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> LoadResult {
     let (bank_forks, leader_schedule_cache, starting_snapshot_hashes, ..) = load_bank_forks(
         genesis_config,
@@ -63,7 +60,6 @@ pub fn load(
         &process_options,
         cache_block_meta_sender,
         accounts_update_notifier,
-        mev,
     );
 
     blockstore_processor::process_blockstore_from_root(
@@ -88,7 +84,6 @@ pub fn load_bank_forks(
     process_options: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> (
     Arc<RwLock<BankForks>>,
     LeaderScheduleCache,
@@ -129,7 +124,6 @@ pub fn load_bank_forks(
             snapshot_config.as_ref().unwrap(),
             process_options,
             accounts_update_notifier,
-            mev,
         )
     } else {
         let maybe_filler_accounts = process_options
@@ -149,7 +143,6 @@ pub fn load_bank_forks(
             process_options,
             cache_block_meta_sender,
             accounts_update_notifier,
-            mev,
         );
         bank_forks
             .read()
@@ -193,7 +186,6 @@ fn bank_forks_from_snapshot(
     snapshot_config: &SnapshotConfig,
     process_options: &ProcessOptions,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> (Arc<RwLock<BankForks>>, Option<StartingSnapshotHashes>) {
     // Fail hard here if snapshot fails to load, don't silently continue
     if account_paths.is_empty() {
@@ -221,7 +213,6 @@ fn bank_forks_from_snapshot(
             process_options.verify_index,
             process_options.accounts_db_config.clone(),
             accounts_update_notifier,
-            mev,
         )
         .expect("Load from snapshot failed");
 

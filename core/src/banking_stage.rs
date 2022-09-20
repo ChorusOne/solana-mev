@@ -2,6 +2,7 @@
 //! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
+use solana_runtime::mev::Mev;
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
@@ -403,6 +404,7 @@ impl BankingStage {
     pub fn new(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        mev: Option<&Mev>,
         verified_receiver: BankingPacketReceiver,
         tpu_verified_vote_receiver: BankingPacketReceiver,
         verified_vote_receiver: BankingPacketReceiver,
@@ -416,6 +418,7 @@ impl BankingStage {
         Self::new_num_threads(
             cluster_info,
             poh_recorder,
+            mev,
             verified_receiver,
             tpu_verified_vote_receiver,
             verified_vote_receiver,
@@ -433,6 +436,7 @@ impl BankingStage {
     pub fn new_num_threads(
         cluster_info: &Arc<ClusterInfo>,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        mev: Option<&Mev>,
         verified_receiver: BankingPacketReceiver,
         tpu_verified_vote_receiver: BankingPacketReceiver,
         verified_vote_receiver: BankingPacketReceiver,
@@ -476,12 +480,14 @@ impl BankingStage {
                 let cost_model = cost_model.clone();
                 let connection_cache = connection_cache.clone();
                 let bank_forks = bank_forks.clone();
+                let mev = mev.cloned();
                 Builder::new()
                     .name(format!("solBanknStgTx{:02}", i))
                     .spawn(move || {
                         Self::process_loop(
                             &verified_receiver,
                             &poh_recorder,
+                            mev,
                             &cluster_info,
                             &mut recv_start,
                             forward_option,
@@ -662,6 +668,7 @@ impl BankingStage {
         _my_pubkey: &Pubkey,
         max_tx_ingestion_ns: u128,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        mev: Option<&Mev>,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
@@ -750,6 +757,7 @@ impl BankingStage {
                         &bank_creation_time,
                         recorder,
                         &mut payload.sanitized_transactions,
+                        mev,
                         transaction_status_sender.clone(),
                         gossip_vote_sender,
                         banking_stage_stats,
@@ -1001,6 +1009,7 @@ impl BankingStage {
         my_pubkey: &Pubkey,
         socket: &UdpSocket,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        mev: Option<&Mev>,
         cluster_info: &ClusterInfo,
         buffered_packet_batches: &mut UnprocessedPacketBatches,
         forward_option: &ForwardOption,
@@ -1065,6 +1074,7 @@ impl BankingStage {
                         my_pubkey,
                         max_tx_ingestion_ns,
                         poh_recorder,
+                        mev,
                         buffered_packet_batches,
                         transaction_status_sender,
                         gossip_vote_sender,
@@ -1221,6 +1231,7 @@ impl BankingStage {
     fn process_loop(
         verified_receiver: &BankingPacketReceiver,
         poh_recorder: &Arc<RwLock<PohRecorder>>,
+        mev: Option<Mev>,
         cluster_info: &ClusterInfo,
         recv_start: &mut Instant,
         forward_option: ForwardOption,
@@ -1254,6 +1265,7 @@ impl BankingStage {
                         &my_pubkey,
                         &socket,
                         poh_recorder,
+                        mev.as_ref(),
                         cluster_info,
                         &mut buffered_packet_batches,
                         &forward_option,
@@ -1377,6 +1389,7 @@ impl BankingStage {
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
+        mev: Option<&Mev>,
     ) -> ExecuteAndCommitTransactionsOutput {
         let mut execute_and_commit_timings = LeaderExecuteAndCommitTimings::default();
         let mut mint_decimals: HashMap<Pubkey, u8> = HashMap::new();
@@ -1414,7 +1427,8 @@ impl BankingStage {
                 transaction_status_sender.is_some(),
                 &mut execute_and_commit_timings.execute_timings,
                 None, // account_overrides
-                log_messages_bytes_limit
+                log_messages_bytes_limit,
+                mev
             ),
             "load_execute",
         );
@@ -1620,6 +1634,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
+        mev: Option<&Mev>,
     ) -> ProcessTransactionBatchOutput {
         let mut cost_model_time = Measure::start("cost_model");
 
@@ -1656,6 +1671,7 @@ impl BankingStage {
                 transaction_status_sender,
                 gossip_vote_sender,
                 log_messages_bytes_limit,
+                mev,
             );
 
         let mut unlock_time = Measure::start("unlock_time");
@@ -1813,6 +1829,7 @@ impl BankingStage {
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
         log_messages_bytes_limit: Option<usize>,
+        mev: Option<&Mev>,
     ) -> ProcessTransactionsSummary {
         let mut chunk_start = 0;
         let mut all_retryable_tx_indexes = vec![];
@@ -1845,6 +1862,7 @@ impl BankingStage {
                 gossip_vote_sender,
                 qos_service,
                 log_messages_bytes_limit,
+                mev,
             );
 
             let ProcessTransactionBatchOutput {
@@ -2019,6 +2037,7 @@ impl BankingStage {
         bank_creation_time: &Instant,
         poh: &'a TransactionRecorder,
         sanitized_transactions: &mut [SanitizedTransaction],
+        mev: Option<&Mev>,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &'a ReplayVoteSender,
         banking_stage_stats: &'a BankingStageStats,
@@ -2028,7 +2047,7 @@ impl BankingStage {
     ) -> ProcessTransactionsSummary {
         // Go through the sanitized transactions and fill `mev_accounts` if
         // necessary.
-        if let Some(mev) = &bank.mev {
+        if let Some(mev) = mev {
             for tx in sanitized_transactions.iter_mut() {
                 mev.fill_tx_mev_accounts(tx);
             }
@@ -2044,6 +2063,7 @@ impl BankingStage {
                 gossip_vote_sender,
                 qos_service,
                 log_messages_bytes_limit,
+                mev,
             ),
             "process_transaction_time",
         );
