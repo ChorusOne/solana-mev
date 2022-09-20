@@ -1,5 +1,3 @@
-use solana_runtime::mev::Mev;
-
 use {
     crate::{
         block_error::BlockError, blockstore::Blockstore, blockstore_db::BlockstoreError,
@@ -589,7 +587,6 @@ pub fn test_process_blockstore(
             &opts,
             None,
             None,
-            None,
         );
     let (accounts_package_sender, _) = unbounded();
     process_blockstore_from_root(
@@ -614,7 +611,6 @@ pub(crate) fn process_blockstore_for_bank_0(
     opts: &ProcessOptions,
     cache_block_meta_sender: Option<&CacheBlockMetaSender>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> BankForks {
     // Setup bank for slot 0
     let bank0 = Bank::new_with_paths(
@@ -628,7 +624,6 @@ pub(crate) fn process_blockstore_for_bank_0(
         false,
         opts.accounts_db_config.clone(),
         accounts_update_notifier,
-        mev,
     );
     let bank_forks = BankForks::new(bank0);
 

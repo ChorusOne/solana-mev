@@ -55,8 +55,6 @@ mod utils;
 #[cfg(test)]
 pub(crate) use tests::reconstruct_accounts_db_via_serialization;
 
-use crate::mev::Mev;
-
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub(crate) enum SerdeStyle {
     Newer,
@@ -214,7 +212,6 @@ pub(crate) fn bank_from_streams<R>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> std::result::Result<Bank, Error>
 where
     R: Read,
@@ -253,7 +250,6 @@ where
                 verify_index,
                 accounts_db_config,
                 accounts_update_notifier,
-                mev,
             )?;
             Ok(bank)
         }};
@@ -411,7 +407,6 @@ fn reconstruct_bank_from_fields<E>(
     verify_index: bool,
     accounts_db_config: Option<AccountsDbConfig>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
-    mev: Option<Mev>,
 ) -> Result<Bank, Error>
 where
     E: SerializableStorage + std::marker::Sync,
@@ -442,7 +437,6 @@ where
         additional_builtins,
         debug_do_not_add_builtins,
         reconstructed_accounts_db_info.accounts_data_len,
-        mev,
     );
 
     info!("rent_collector: {:?}", bank.rent_collector());

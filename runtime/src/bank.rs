@@ -1249,8 +1249,6 @@ pub struct Bank {
 
     /// Transaction fee structure
     pub fee_structure: FeeStructure,
-
-    pub mev: Option<Mev>,
 }
 
 impl Default for BlockhashQueue {
@@ -1284,7 +1282,7 @@ pub struct CommitTransactionCounts {
 
 impl Bank {
     pub fn default_for_tests() -> Self {
-        Self::default_with_accounts(Accounts::default_for_tests(), None)
+        Self::default_with_accounts(Accounts::default_for_tests())
     }
 
     pub fn new_for_benches(genesis_config: &GenesisConfig) -> Self {
@@ -1341,7 +1339,7 @@ impl Bank {
         )
     }
 
-    fn default_with_accounts(accounts: Accounts, mev: Option<Mev>) -> Self {
+    fn default_with_accounts(accounts: Accounts) -> Self {
         let mut bank = Self {
             rc: BankRc::new(accounts, Slot::default()),
             src: StatusCacheRc::default(),
@@ -1401,7 +1399,6 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev,
         };
 
         let accounts_data_size_initial = bank.get_total_accounts_stats().unwrap().data_len as u64;
@@ -1431,7 +1428,6 @@ impl Bank {
             debug_do_not_add_builtins,
             Some(ACCOUNTS_DB_CONFIG_FOR_TESTING),
             None,
-            None,
         )
     }
 
@@ -1456,7 +1452,6 @@ impl Bank {
             debug_do_not_add_builtins,
             Some(ACCOUNTS_DB_CONFIG_FOR_BENCHMARKS),
             None,
-            None,
         )
     }
 
@@ -1472,7 +1467,6 @@ impl Bank {
         debug_do_not_add_builtins: bool,
         accounts_db_config: Option<AccountsDbConfig>,
         accounts_update_notifier: Option<AccountsUpdateNotifier>,
-        mev: Option<Mev>,
     ) -> Self {
         let accounts = Accounts::new_with_config(
             paths,
@@ -1483,7 +1477,7 @@ impl Bank {
             accounts_db_config,
             accounts_update_notifier,
         );
-        let mut bank = Self::default_with_accounts(accounts, mev);
+        let mut bank = Self::default_with_accounts(accounts);
         bank.ancestors = Ancestors::from(vec![bank.slot()]);
         bank.transaction_debug_keys = debug_keys;
         bank.cluster_type = Some(genesis_config.cluster_type);
@@ -1740,7 +1734,6 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: parent.fee_structure.clone(),
-            mev: parent.mev.clone(),
         };
 
         let (_, ancestors_time) = Measure::this(
@@ -1988,7 +1981,6 @@ impl Bank {
         additional_builtins: Option<&Builtins>,
         debug_do_not_add_builtins: bool,
         accounts_data_size_initial: u64,
-        mev: Option<Mev>,
     ) -> Self {
         fn new<T: Default>() -> T {
             T::default()
@@ -2053,7 +2045,6 @@ impl Bank {
             accounts_data_size_delta_on_chain: AtomicI64::new(0),
             accounts_data_size_delta_off_chain: AtomicI64::new(0),
             fee_structure: FeeStructure::default(),
-            mev,
         };
         bank.finish_init(
             genesis_config,
@@ -3647,6 +3638,7 @@ impl Bank {
             true,
             &mut timings,
             Some(&account_overrides),
+            None,
         );
 
         let post_simulation_accounts = loaded_transactions
@@ -4092,6 +4084,7 @@ impl Bank {
         enable_log_recording: bool,
         timings: &mut ExecuteTimings,
         account_overrides: Option<&AccountOverrides>,
+        mev: Option<&Mev>,
     ) -> LoadAndExecuteTransactionsOutput {
         let sanitized_txs = batch.sanitized_transactions();
         debug!("processing transactions: {}", sanitized_txs.len());
@@ -4210,8 +4203,7 @@ impl Bank {
                     };
 
                     // Before executing `tx`, are we interested in the pool state?
-                    let pre_tx_pool_state = self
-                        .mev
+                    let pre_tx_pool_state = mev
                         .as_ref()
                         .and_then(|mev| mev.get_pre_tx_pool_state(tx, loaded_transaction));
 
@@ -4227,8 +4219,7 @@ impl Bank {
                     );
                     execution_results.push(tx_result);
                     if let Some(pre_pool_state) = pre_tx_pool_state {
-                        let mev = self
-                            .mev
+                        let mev = mev
                             .as_ref()
                             .expect("Is Some because we have a pre pool state.");
                         mev.execute_and_log_mev_opportunities(
@@ -5514,6 +5505,7 @@ impl Bank {
             enable_cpi_recording,
             enable_log_recording,
             timings,
+            None,
             None,
         );
 

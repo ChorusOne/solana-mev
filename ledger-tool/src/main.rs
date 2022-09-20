@@ -836,7 +836,6 @@ fn load_bank_forks(
         None,
         accounts_package_sender,
         None,
-        None,
     )
     .map(|(bank_forks, .., starting_snapshot_hashes)| (bank_forks, starting_snapshot_hashes))
 }

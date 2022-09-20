@@ -339,6 +339,7 @@ pub struct Validator {
     snapshot_packager_service: Option<SnapshotPackagerService>,
     poh_recorder: Arc<Mutex<PohRecorder>>,
     poh_service: PohService,
+    mev_log: Option<MevLog>,
     tpu: Tpu,
     tvu: Tvu,
     ip_echo_server: Option<solana_net_utils::IpEchoServer>,
@@ -347,7 +348,6 @@ pub struct Validator {
     pub blockstore: Arc<Blockstore>,
     accountsdb_repl_service: Option<AccountsDbReplService>,
     geyser_plugin_service: Option<GeyserPluginService>,
-    mev_log: Option<MevLog>,
 }
 
 // in the distant future, get rid of ::new()/exit() and use Result properly...
@@ -536,7 +536,6 @@ impl Validator {
             &start_progress,
             accounts_update_notifier,
             transaction_notifier,
-            mev,
         );
 
         let last_full_snapshot_slot = process_blockstore(
@@ -984,6 +983,7 @@ impl Validator {
         let tpu = Tpu::new(
             &cluster_info,
             &poh_recorder,
+            mev.as_ref(),
             entry_receiver,
             retransmit_slots_receiver,
             TpuSockets {
@@ -1327,7 +1327,6 @@ fn load_blockstore(
     start_progress: &Arc<RwLock<ValidatorStartProgress>>,
     accounts_update_notifier: Option<AccountsUpdateNotifier>,
     transaction_notifier: Option<TransactionNotifierLock>,
-    mev: Option<Mev>,
 ) -> (
     GenesisConfig,
     BankForks,
@@ -1434,7 +1433,6 @@ fn load_blockstore(
             .cache_block_meta_sender
             .as_ref(),
         accounts_update_notifier,
-        mev,
     );
 
     leader_schedule_cache.set_fixed_leader_schedule(config.fixed_leader_schedule.clone());
