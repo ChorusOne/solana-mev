@@ -1092,17 +1092,18 @@ impl Validator {
     }
 
     pub fn join(self) {
+        drop(self.bank_forks);
+        drop(self.cluster_info);
+
+        self.poh_service.join().expect("poh_service");
+        drop(self.poh_recorder);
+
         if let Some(ref mev_log) = self.mev_log {
             mev_log
                 .log_send_channel
                 .send(MevMsg::Exit)
                 .expect("MEV failed to send msg to exit");
         }
-        drop(self.bank_forks);
-        drop(self.cluster_info);
-
-        self.poh_service.join().expect("poh_service");
-        drop(self.poh_recorder);
 
         if let Some(json_rpc_service) = self.json_rpc_service {
             json_rpc_service.join().expect("rpc_service");
