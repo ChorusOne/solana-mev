@@ -2408,6 +2408,7 @@ mod tests {
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
+                None,
                 verified_receiver,
                 tpu_vote_receiver,
                 gossip_verified_vote_receiver,
@@ -2462,6 +2463,7 @@ mod tests {
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
+                None,
                 verified_receiver,
                 tpu_vote_receiver,
                 verified_gossip_vote_receiver,
@@ -2541,6 +2543,7 @@ mod tests {
             let banking_stage = BankingStage::new(
                 &cluster_info,
                 &poh_recorder,
+                None,
                 verified_receiver,
                 tpu_vote_receiver,
                 gossip_verified_vote_receiver,
@@ -2696,6 +2699,7 @@ mod tests {
                 let _banking_stage = BankingStage::new_num_threads(
                     &cluster_info,
                     &poh_recorder,
+                    None,
                     verified_receiver,
                     tpu_vote_receiver,
                     vote_receiver,
@@ -4120,6 +4124,7 @@ mod tests {
                 &Pubkey::default(),
                 max_tx_processing_ns,
                 &poh_recorder,
+                None,
                 &mut buffered_packet_batches,
                 None,
                 &gossip_vote_sender,
@@ -4138,6 +4143,7 @@ mod tests {
                 &Pubkey::default(),
                 max_tx_processing_ns,
                 &poh_recorder,
+                None,
                 &mut buffered_packet_batches,
                 None,
                 &gossip_vote_sender,
@@ -4198,6 +4204,7 @@ mod tests {
                         &Pubkey::default(),
                         std::u128::MAX,
                         &poh_recorder_,
+                        None,
                         &mut buffered_packet_batches,
                         None,
                         &gossip_vote_sender,
