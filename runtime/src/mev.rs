@@ -8,6 +8,7 @@ use serde::{ser::SerializeStruct, Serialize};
 use solana_sdk::{
     account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey,
     transaction::SanitizedTransaction,
+    signature::Signature,
 };
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
 use spl_token_swap::state::SwapVersion;
@@ -101,6 +102,14 @@ pub struct PrePostPoolState {
     /// Transaction hash which triggered the MEV.
     #[serde(serialize_with = "serialize_b58")]
     transaction_hash: Hash,
+
+    /// The first signature of the transaction.
+    ///
+    /// Block explorers identify transactions by the first signature, not by the
+    /// transaction hash, so we also keep the signature for cross-referencing.
+    #[serde(serialize_with = "serialize_b58")]
+    transaction_signature: Signature,
+
     slot: Slot,
 
     orca_pre_tx_pool: PoolState,
@@ -197,6 +206,7 @@ impl Mev {
             .ok()?;
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolState {
             transaction_hash: *tx.message_hash(),
+            transaction_signature: *tx.signature(),
             slot,
             orca_pre_tx_pool: pre_tx_pool_state,
             orca_post_tx_pool: post_tx_pool_state,
@@ -246,6 +256,7 @@ fn test_log_serialization() {
 
     let opportunity = PrePostPoolState {
         transaction_hash: Hash::new_unique(),
+        transaction_signature: Signature::new(&[0; 64]),
         slot: 1,
         orca_pre_tx_pool: vec![OrcaPoolWithBalance {
             pool: OrcaPoolAddresses {
@@ -274,6 +285,7 @@ fn test_log_serialization() {
     let expected_result_str = "\
     {\
         'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
+        'transaction_signature':'1111111111111111111111111111111111111111111111111111111111111111',\
         'slot':1,\
         'orca_pre_tx_pool':[\
           {\
