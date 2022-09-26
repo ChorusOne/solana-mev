@@ -103,7 +103,7 @@ fn main() {
         RpcClient::new_with_commitment(opts.cluster.clone(), CommitmentConfig::confirmed());
     let signer_keypair = read_keypair_file(signer_path).unwrap();
 
-    match opts.subcommand {
+    let tx_output = match opts.subcommand {
         OptSubcommand::Init(init_opts) => {
             let fees = spl_token_swap::curve::fees::Fees {
                 trade_fee_numerator: init_opts.trade_fee_numerator,
@@ -115,33 +115,29 @@ fn main() {
                 host_fee_numerator: init_opts.host_fee_numerator,
                 host_fee_denominator: init_opts.host_fee_denominator,
             };
-
-            let token_pool = create_token_pool(
+            create_token_pool(
                 &rpc_client,
                 &signer_keypair,
                 &opts.token_swap_program_id,
                 &opts.token_swap_a_account,
                 &opts.token_swap_b_account,
                 fees,
-            );
-            println!("{}", serde_json::to_string(&token_pool).unwrap());
+            )
         }
-        OptSubcommand::Swap(swap_opts) => {
-            swap_tokens(
-                &rpc_client,
-                &signer_keypair,
-                &opts.token_swap_program_id,
-                &swap_opts.token_swap_account,
-                &swap_opts.token_a_client,
-                &opts.token_swap_a_account,
-                &opts.token_swap_b_account,
-                &swap_opts.token_b_client,
-                &swap_opts.pool_mint,
-                &swap_opts.pool_fee,
-                swap_opts.amount,
-                swap_opts.minimum_amount_out,
-            );
-        }
+        OptSubcommand::Swap(swap_opts) => swap_tokens(
+            &rpc_client,
+            &signer_keypair,
+            &opts.token_swap_program_id,
+            &swap_opts.token_swap_account,
+            &swap_opts.token_a_client,
+            &opts.token_swap_a_account,
+            &opts.token_swap_b_account,
+            &swap_opts.token_b_client,
+            &swap_opts.pool_mint,
+            &swap_opts.pool_fee,
+            swap_opts.amount,
+            swap_opts.minimum_amount_out,
+        ),
         OptSubcommand::InnerSwap(inner_swap_opts) => inner_swap(
             &rpc_client,
             &signer_keypair,
@@ -157,5 +153,6 @@ fn main() {
             inner_swap_opts.amount,
             inner_swap_opts.minimum_amount_out,
         ),
-    }
+    };
+    println!("{}", serde_json::to_string(&tx_output).unwrap());
 }

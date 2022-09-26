@@ -245,35 +245,38 @@ class TokenPool(NamedTuple):
         token_b_client: str,
         amount: int,
         minimum_amount_out: int,
-    ) -> None:
-        run(
-            'cargo',
-            'run',
-            '--manifest-path',
-            './mev-tests/helper-programs/token-swap-cli/Cargo.toml',
-            '--',
-            '--token-swap-program-id',
-            self.token_swap_program_id,
-            '--token-swap-a-account',
-            self.token_swap_a_account,
-            '--token-swap-b-account',
-            self.token_swap_b_account,
-            'swap',
-            '--token-swap-account',
-            self.token_swap_account,
-            '--token-a-client',
-            token_a_client,
-            '--token-b-client',
-            token_b_client,
-            '--pool-mint',
-            self.pool_mint_account,
-            '--pool-fee',
-            self.pool_fee_account,
-            '--amount',
-            str(amount),
-            '--minimum-amount-out',
-            str(minimum_amount_out),
+    ) -> str:
+        swap_json = json.loads(
+            run(
+                'cargo',
+                'run',
+                '--manifest-path',
+                './mev-tests/helper-programs/token-swap-cli/Cargo.toml',
+                '--',
+                '--token-swap-program-id',
+                self.token_swap_program_id,
+                '--token-swap-a-account',
+                self.token_swap_a_account,
+                '--token-swap-b-account',
+                self.token_swap_b_account,
+                'swap',
+                '--token-swap-account',
+                self.token_swap_account,
+                '--token-a-client',
+                token_a_client,
+                '--token-b-client',
+                token_b_client,
+                '--pool-mint',
+                self.pool_mint_account,
+                '--pool-fee',
+                self.pool_fee_account,
+                '--amount',
+                str(amount),
+                '--minimum-amount-out',
+                str(minimum_amount_out),
+            )
         )
+        return swap_json['Swap']
 
     def inner_swap(
         self,
@@ -282,37 +285,40 @@ class TokenPool(NamedTuple):
         token_b_client: str,
         amount: int,
         minimum_amount_out: int,
-    ) -> None:
-        run(
-            'cargo',
-            'run',
-            '--manifest-path',
-            './mev-tests/helper-programs/token-swap-cli/Cargo.toml',
-            '--',
-            '--token-swap-program-id',
-            self.token_swap_program_id,
-            '--token-swap-a-account',
-            self.token_swap_a_account,
-            '--token-swap-b-account',
-            self.token_swap_b_account,
-            'inner-swap',
-            '--caller-account',
-            inner_program,
-            '--token-swap-account',
-            self.token_swap_account,
-            '--token-a-client',
-            token_a_client,
-            '--token-b-client',
-            token_b_client,
-            '--pool-mint',
-            self.pool_mint_account,
-            '--pool-fee',
-            self.pool_fee_account,
-            '--amount',
-            str(amount),
-            '--minimum-amount-out',
-            str(minimum_amount_out),
+    ) -> str:
+        swap_json = json.loads(
+            run(
+                'cargo',
+                'run',
+                '--manifest-path',
+                './mev-tests/helper-programs/token-swap-cli/Cargo.toml',
+                '--',
+                '--token-swap-program-id',
+                self.token_swap_program_id,
+                '--token-swap-a-account',
+                self.token_swap_a_account,
+                '--token-swap-b-account',
+                self.token_swap_b_account,
+                'inner-swap',
+                '--caller-account',
+                inner_program,
+                '--token-swap-account',
+                self.token_swap_account,
+                '--token-a-client',
+                token_a_client,
+                '--token-b-client',
+                token_b_client,
+                '--pool-mint',
+                self.pool_mint_account,
+                '--pool-fee',
+                self.pool_fee_account,
+                '--amount',
+                str(amount),
+                '--minimum-amount-out',
+                str(minimum_amount_out),
+            )
         )
+        return swap_json['Swap']
 
 
 def deploy_token_pool(
@@ -333,7 +339,7 @@ def deploy_token_pool(
             token_swap_b_account,
             'init',
         )
-    )
+    )['SwapInit']
     return TokenPool(
         token_swap_program_id=token_swap_program_id,
         token_swap_account=init_json['address'],
@@ -408,3 +414,10 @@ def compile_bpf_program(cargo_manifest: str) -> None:
         '--manifest-path',
         cargo_manifest,
     )
+
+
+def read_last_mev_log(log_path: str):
+    with open(log_path, 'r') as f:
+        for line in f:
+            last_line = line
+    return json.loads(last_line)
