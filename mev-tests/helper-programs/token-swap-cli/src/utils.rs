@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use serde::{Serialize, Serializer};
 use solana_client::rpc_client::RpcClient;
-use solana_program::{instruction::Instruction, rent::Rent, system_instruction, sysvar};
+use solana_program::{
+    hash::Hash, instruction::Instruction, rent::Rent, system_instruction, sysvar,
+};
 use solana_sdk::{signature::Keypair, signer::Signer, signers::Signers, transaction::Transaction};
 use spl_token::solana_program::{program_pack::Pack, pubkey::Pubkey};
 use spl_token_swap::{
@@ -126,6 +128,13 @@ pub struct TokenPool {
     pool_fee: Pubkey,
 }
 
+#[derive(Serialize)]
+pub enum TransactionOutput {
+    SwapInit(TokenPool),
+    #[serde(serialize_with = "serialize_b58")]
+    Swap(Hash),
+}
+
 pub fn create_token_pool(
     rpc_client: &RpcClient,
     signer_keypair: &Keypair,
@@ -133,7 +142,7 @@ pub fn create_token_pool(
     token_a_account: &Pubkey,
     token_b_account: &Pubkey,
     fees: Fees,
-) -> TokenPool {
+) -> TransactionOutput {
     let mut instructions = Vec::new();
 
     let token_pool_account = Keypair::new();
@@ -233,11 +242,11 @@ pub fn create_token_pool(
     instructions.push(initialize_pool_instruction);
     sign_and_send_transaction(&signer_keypair, &rpc_client, &instructions[..], &signers);
 
-    TokenPool {
+    TransactionOutput::SwapInit(TokenPool {
         address: token_pool_account.pubkey(),
         pool_mint: pool_mint_pubkey,
         pool_fee: pool_fee_keypair.pubkey(),
-    }
+    })
 }
 
 /// Resolve ~/.config/solana/id.json.
@@ -261,7 +270,7 @@ pub fn swap_tokens(
     pool_fee: &Pubkey,
     amount: u64,
     minimum_amount_out: u64,
-) {
+) -> TransactionOutput {
     let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
         &[&token_swap_account.to_bytes()[..]],
         &token_swap_program_id,
@@ -286,7 +295,8 @@ pub fn swap_tokens(
         },
     )
     .unwrap();
-    sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
+    let tx = sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
+    TransactionOutput::Swap(tx.message.hash())
 }
 
 pub fn inner_swap(
@@ -303,7 +313,7 @@ pub fn inner_swap(
     pool_fee: &Pubkey,
     amount: u64,
     minimum_amount_out: u64,
-) {
+) -> TransactionOutput {
     let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
         &[&token_swap_account.to_bytes()[..]],
         &token_swap_program_id,
@@ -326,5 +336,6 @@ pub fn inner_swap(
         minimum_amount_out,
     )
     .unwrap();
-    sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
+    let tx = sign_and_send_transaction(&signer_keypair, &rpc_client, &[ix], &[signer_keypair]);
+    TransactionOutput::Swap(tx.message.hash())
 }
