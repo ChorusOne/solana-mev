@@ -24,6 +24,7 @@ from util import (
     start_validator,
     restart_validator,
     compile_bpf_program,
+    read_last_mev_log,
 )
 
 
@@ -154,7 +155,7 @@ test_validator = restart_validator(test_validator, config_file=config_file)
 print(f'Swapping tokens ...')
 
 print(f'> Swapping directly')
-token_pool.swap(
+tx_hash = token_pool.swap(
     token_a_client=t0_account.pubkey,
     token_b_client=t1_account.pubkey,
     amount=1_000,
@@ -162,6 +163,8 @@ token_pool.swap(
 )
 
 # check log is working for swaps
+mev_last_line = read_last_mev_log('/tmp/mev.log')
+assert mev_last_line['transaction_hash'] == tx_hash
 
 print('> Compiling the BPF program to swap with an inner program')
 compile_bpf_program(
@@ -176,12 +179,16 @@ inner_token_swap_program_id = solana_program_deploy(inner_swap_deploy_path)
 print(f'> Inner token swap program id is {inner_token_swap_program_id}')
 
 print('> Swapping with an inner program')
-token_pool.inner_swap(
+tx_hash = token_pool.inner_swap(
     inner_program=inner_token_swap_program_id,
     token_a_client=t0_account.pubkey,
     token_b_client=t1_account.pubkey,
     amount=100,
     minimum_amount_out=0,
 )
+
+# check log is working for swaps
+mev_last_line = read_last_mev_log('/tmp/mev.log')
+assert mev_last_line['transaction_hash'] == tx_hash
 
 test_validator.terminate()
