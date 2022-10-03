@@ -91,15 +91,15 @@ impl Serialize for Fees {
 
 // A map from `Pubkey` as `String` to `OrcaPoolWithBalance` so it's easier to
 // serialize with `serde_json`
-type PoolState = HashMap<String, OrcaPoolWithBalance>;
+type PoolStates = HashMap<String, OrcaPoolWithBalance>;
 
 pub enum MevMsg {
-    Log(PrePostPoolState),
+    Log(PrePostPoolStates),
     Exit,
 }
 
 #[derive(Debug, Serialize)]
-pub struct PrePostPoolState {
+pub struct PrePostPoolStates {
     /// Transaction hash which triggered the MEV.
     #[serde(serialize_with = "serialize_b58")]
     transaction_hash: Hash,
@@ -113,8 +113,8 @@ pub struct PrePostPoolState {
 
     slot: Slot,
 
-    orca_pre_tx_pool: PoolState,
-    orca_post_tx_pool: PoolState,
+    orca_pre_tx_pool: PoolStates,
+    orca_post_tx_pool: PoolStates,
 }
 
 impl Mev {
@@ -145,7 +145,7 @@ impl Mev {
     fn get_all_orca_monitored_accounts(
         &self,
         loaded_transaction: &LoadedTransaction,
-    ) -> Result<PoolState, ProgramError> {
+    ) -> Result<PoolStates, ProgramError> {
         loaded_transaction
             .mev_accounts.iter()
             .map(|s| {
@@ -184,7 +184,7 @@ impl Mev {
         &self,
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
-    ) -> Option<PoolState> {
+    ) -> Option<PoolStates> {
         if !tx.mev_keys.is_empty() {
             self.get_all_orca_monitored_accounts(loaded_transaction)
                 .ok()
@@ -200,12 +200,12 @@ impl Mev {
         tx: &SanitizedTransaction,
         loaded_transaction: &mut LoadedTransaction,
         slot: Slot,
-        pre_tx_pool_state: PoolState,
+        pre_tx_pool_state: PoolStates,
     ) -> Option<()> {
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)
             .ok()?;
-        if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolState {
+        if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
             transaction_signature: *tx.signature(),
             slot,
@@ -255,7 +255,7 @@ impl MevLog {
 fn test_log_serialization() {
     use std::str::FromStr;
 
-    let opportunity = PrePostPoolState {
+    let opportunity = PrePostPoolStates {
         transaction_hash: Hash::new_unique(),
         transaction_signature: Signature::new(&[0; 64]),
         slot: 1,
