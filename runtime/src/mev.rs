@@ -62,8 +62,8 @@ pub struct OrcaPoolAddresses {
 #[derive(Debug, Serialize)]
 pub struct OrcaPoolWithBalance {
     pool: OrcaPoolAddresses,
-    pool_a_pre_balance: u64,
-    pool_b_pre_balance: u64,
+    pool_a_balance: u64,
+    pool_b_balance: u64,
     fees: Fees,
 }
 
@@ -182,8 +182,8 @@ impl Mev {
                         pool_a_account: *pool_a_key,
                         pool_b_account: *pool_b_key,
                     },
-                    pool_a_pre_balance: pool_a_account.amount,
-                    pool_b_pre_balance: pool_b_account.amount,
+                    pool_a_balance: pool_a_account.amount,
+                    pool_b_balance: pool_b_account.amount,
                     fees: Fees(pool.fees().clone()),
                 }))
             })
@@ -288,8 +288,8 @@ fn test_log_serialization() {
                     pool_b_account: Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3")
                         .unwrap(),
                 },
-                pool_a_pre_balance: 1,
-                pool_b_pre_balance: 1,
+                pool_a_balance: 1,
+                pool_b_balance: 1,
                 fees: Fees(spl_token_swap::curve::fees::Fees {
                     trade_fee_numerator: 1,
                     trade_fee_denominator: 10,
@@ -319,8 +319,8 @@ fn test_log_serialization() {
               'pool_a_account':'8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh',\
               'pool_b_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3'\
             },\
-            'pool_a_pre_balance':1,\
-            'pool_b_pre_balance':1,\
+            'pool_a_balance':1,\
+            'pool_b_balance':1,\
             'fees':{\
               'host_fee_denominator':10,\
               'host_fee_numerator':1,\
