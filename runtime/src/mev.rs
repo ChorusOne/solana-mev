@@ -1,3 +1,4 @@
+pub mod arbitrage;
 pub mod utils;
 
 use std::{collections::HashMap, fs, io::Write, sync::Arc, thread::JoinHandle};
