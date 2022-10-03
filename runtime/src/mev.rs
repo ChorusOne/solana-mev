@@ -4,7 +4,10 @@ use std::{collections::HashMap, fs, io::Write, sync::Arc, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
-use serde::{ser::SerializeStruct, Serialize};
+use serde::{
+    ser::{SerializeMap, SerializeStruct},
+    Serialize, Serializer,
+};
 use solana_sdk::{
     account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
     transaction::SanitizedTransaction,
@@ -91,7 +94,21 @@ impl Serialize for Fees {
 
 // A map from `Pubkey` as `String` to `OrcaPoolWithBalance` so it's easier to
 // serialize with `serde_json`
-type PoolStates = HashMap<String, OrcaPoolWithBalance>;
+#[derive(Debug)]
+pub struct PoolStates(HashMap<Pubkey, OrcaPoolWithBalance>);
+
+impl Serialize for PoolStates {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (k, v) in &self.0 {
+            map.serialize_entry(&k.to_string(), &v)?;
+        }
+        map.end()
+    }
+}
 
 pub enum MevMsg {
     Log(PrePostPoolStates),
@@ -146,7 +163,7 @@ impl Mev {
         &self,
         loaded_transaction: &LoadedTransaction,
     ) -> Result<PoolStates, ProgramError> {
-        loaded_transaction
+        let pool_states = loaded_transaction
             .mev_accounts.iter()
             .map(|s| {
                 let [
@@ -159,7 +176,7 @@ impl Mev {
 
                 let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data())?;
                 let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data())?;
-                Ok((pool_key.to_string(), OrcaPoolWithBalance {
+                Ok((*pool_key, OrcaPoolWithBalance {
                     pool: OrcaPoolAddresses {
                         address: *pool_key,
                         pool_a_account: *pool_a_key,
@@ -170,7 +187,8 @@ impl Mev {
                     fees: Fees(pool.fees().clone()),
                 }))
             })
-            .collect()
+            .collect::<Result<HashMap<Pubkey,OrcaPoolWithBalance>, ProgramError>>()?;
+        Ok(PoolStates(pool_states))
     }
 
     pub fn is_monitored_account(&self, tx: &SanitizedTransaction) -> bool {
