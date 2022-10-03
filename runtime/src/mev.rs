@@ -1,14 +1,13 @@
 pub mod utils;
 
-use std::{fs, io::Write, sync::Arc, thread::JoinHandle};
+use std::{collections::HashMap, fs, io::Write, sync::Arc, thread::JoinHandle};
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
 use serde::{ser::SerializeStruct, Serialize};
 use solana_sdk::{
-    account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey,
+    account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
     transaction::SanitizedTransaction,
-    signature::Signature,
 };
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
 use spl_token_swap::state::SwapVersion;
@@ -90,7 +89,9 @@ impl Serialize for Fees {
     }
 }
 
-type PoolState = Vec<OrcaPoolWithBalance>;
+// A map from `Pubkey` as `String` to `OrcaPoolWithBalance` so it's easier to
+// serialize with `serde_json`
+type PoolState = HashMap<String, OrcaPoolWithBalance>;
 
 pub enum MevMsg {
     Log(PrePostPoolState),
@@ -144,7 +145,7 @@ impl Mev {
     fn get_all_orca_monitored_accounts(
         &self,
         loaded_transaction: &LoadedTransaction,
-    ) -> Result<Vec<OrcaPoolWithBalance>, ProgramError> {
+    ) -> Result<PoolState, ProgramError> {
         loaded_transaction
             .mev_accounts.iter()
             .map(|s| {
@@ -158,7 +159,7 @@ impl Mev {
 
                 let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data())?;
                 let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data())?;
-                Ok(OrcaPoolWithBalance {
+                Ok((pool_key.to_string(), OrcaPoolWithBalance {
                     pool: OrcaPoolAddresses {
                         address: *pool_key,
                         pool_a_account: *pool_a_key,
@@ -167,7 +168,7 @@ impl Mev {
                     pool_a_pre_balance: pool_a_account.amount,
                     pool_b_pre_balance: pool_b_account.amount,
                     fees: Fees(pool.fees().clone()),
-                })
+                }))
             })
             .collect()
     }
@@ -258,28 +259,34 @@ fn test_log_serialization() {
         transaction_hash: Hash::new_unique(),
         transaction_signature: Signature::new(&[0; 64]),
         slot: 1,
-        orca_pre_tx_pool: vec![OrcaPoolWithBalance {
-            pool: OrcaPoolAddresses {
-                address: Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap(),
-                pool_a_account: Pubkey::from_str("8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh")
-                    .unwrap(),
-                pool_b_account: Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3")
-                    .unwrap(),
+        orca_pre_tx_pool: vec![(
+            "4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM".to_owned(),
+            OrcaPoolWithBalance {
+                pool: OrcaPoolAddresses {
+                    address: Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM")
+                        .unwrap(),
+                    pool_a_account: Pubkey::from_str("8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh")
+                        .unwrap(),
+                    pool_b_account: Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3")
+                        .unwrap(),
+                },
+                pool_a_pre_balance: 1,
+                pool_b_pre_balance: 1,
+                fees: Fees(spl_token_swap::curve::fees::Fees {
+                    trade_fee_numerator: 1,
+                    trade_fee_denominator: 10,
+                    owner_trade_fee_numerator: 1,
+                    owner_trade_fee_denominator: 10,
+                    owner_withdraw_fee_numerator: 1,
+                    owner_withdraw_fee_denominator: 10,
+                    host_fee_numerator: 1,
+                    host_fee_denominator: 10,
+                }),
             },
-            pool_a_pre_balance: 1,
-            pool_b_pre_balance: 1,
-            fees: Fees(spl_token_swap::curve::fees::Fees {
-                trade_fee_numerator: 1,
-                trade_fee_denominator: 10,
-                owner_trade_fee_numerator: 1,
-                owner_trade_fee_denominator: 10,
-                owner_withdraw_fee_numerator: 1,
-                owner_withdraw_fee_denominator: 10,
-                host_fee_numerator: 1,
-                host_fee_denominator: 10,
-            }),
-        }],
-        orca_post_tx_pool: vec![],
+        )]
+        .into_iter()
+        .collect(),
+        orca_post_tx_pool: HashMap::new(),
     };
 
     let expected_result_str = "\
@@ -287,7 +294,7 @@ fn test_log_serialization() {
         'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
         'transaction_signature':'1111111111111111111111111111111111111111111111111111111111111111',\
         'slot':1,\
-        'orca_pre_tx_pool':[\
+        'orca_pre_tx_pool':{'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM':\
           {\
             'pool':{\
               'address':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
@@ -305,8 +312,8 @@ fn test_log_serialization() {
               'trade_fee_numerator':1\
             }\
           }\
-        ],\
-        'orca_post_tx_pool':[]\
+        },\
+        'orca_post_tx_pool':{}\
       }"
     .replace("'", "\"");
     let serialized_json = serde_json::to_string(&opportunity).expect("Serialization failed");
