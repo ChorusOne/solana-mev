@@ -125,7 +125,7 @@ mod tests {
 
     #[test]
     fn test_get_arbitrage() {
-        let pre_post_pool_states = PrePostPoolStates {
+        let mut pre_post_pool_states = PrePostPoolStates {
             transaction_hash: Hash::new_unique(),
             transaction_signature: Signature::new_unique(),
             slot: 1,
@@ -232,5 +232,45 @@ mod tests {
 
         let has_arbitrage = path.get_arbitrage(&pre_post_pool_states);
         assert_eq!(has_arbitrage, true);
+
+        pre_post_pool_states
+            .orca_post_tx_pool
+            .0
+            .get_mut(&Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap())
+            .unwrap()
+            .pool_a_balance = 461823;
+        pre_post_pool_states
+            .orca_post_tx_pool
+            .0
+            .get_mut(&Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap())
+            .unwrap()
+            .pool_a_balance = 64005199;
+        pre_post_pool_states
+            .orca_post_tx_pool
+            .0
+            .get_mut(&Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap())
+            .unwrap()
+            .pool_a_balance = 5489662785068;
+        pre_post_pool_states
+            .orca_post_tx_pool
+            .0
+            .get_mut(&Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap())
+            .unwrap()
+            .pool_a_balance = 13408494240;
+        pre_post_pool_states
+            .orca_post_tx_pool
+            .0
+            .get_mut(&Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap())
+            .unwrap()
+            .pool_a_balance = 40088165867986;
+        pre_post_pool_states
+            .orca_post_tx_pool
+            .0
+            .get_mut(&Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap())
+            .unwrap()
+            .pool_a_balance = 1384360183450;
+
+        let has_arbitrage = path.get_arbitrage(&pre_post_pool_states);
+        assert_eq!(has_arbitrage, false);
     }
 }
