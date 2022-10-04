@@ -37,18 +37,6 @@ impl MevPath {
                 ),
             };
             let fees = &tokens_state.fees.0;
-            let total_fee_denominator = fees.host_fee_denominator
-                * fees.owner_trade_fee_denominator
-                * fees.trade_fee_denominator;
-            // 1 - fees
-            let total_fee_numerator = total_fee_denominator - fees.host_fee_numerator
-                + fees.host_fee_numerator
-                    * (fees.owner_trade_fee_denominator * fees.trade_fee_denominator)
-                + fees.owner_trade_fee_numerator
-                    * (fees.host_fee_denominator * fees.trade_fee_denominator)
-                + fees.trade_fee_numerator
-                    * (fees.host_fee_denominator * fees.owner_trade_fee_denominator);
-
             let host_fee = fees.host_fee_numerator as f64 / fees.host_fee_denominator as f64;
             let owner_fee =
                 fees.owner_trade_fee_numerator as f64 / fees.owner_trade_fee_denominator as f64;
@@ -57,22 +45,18 @@ impl MevPath {
 
             total_rate *= token_balance_to / token_balance_from;
             total_rate *= total_fee;
-            // numerator *= token_balance_to * total_fee_numerator;
-            // denominator *= token_balance_from * total_fee_denominator;
         }
 
         if total_rate > 1_f64 {
-            // optimal_input_numerator = (fee_ca * fee_bc * fee_ab * ratio_ab * ratio_bc * ratio_ca)**0.5 -1
-            // let optimal_input_numerator = f64::sqrt(numerator) - 1;
-            true
             // We have an arbitrage
+            true
         } else {
             false
         }
     }
 }
 
-fn get_all_arbitrage_from_path(pre_post_pool_states: &PrePostPoolStates) {
+fn get_pre_defined_arbitrage_from_path(pre_post_pool_states: &PrePostPoolStates) -> bool {
     // wSOL->USDC->wstETH->stSOL->USDC->wSOL
     // wSOL/USDC: EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U
     // wstETH/USDC: v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG
@@ -113,7 +97,7 @@ fn get_all_arbitrage_from_path(pre_post_pool_states: &PrePostPoolStates) {
         },
     ]);
 
-    let arbitrage_opportunity = path.get_arbitrage(pre_post_pool_states);
+    path.get_arbitrage(pre_post_pool_states)
 }
 
 #[cfg(test)]
