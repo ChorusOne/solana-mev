@@ -278,34 +278,40 @@ fn test_log_serialization() {
         transaction_hash: Hash::new_unique(),
         transaction_signature: Signature::new(&[0; 64]),
         slot: 1,
-        orca_pre_tx_pool: vec![(
-            "4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM".to_owned(),
-            OrcaPoolWithBalance {
-                pool: OrcaPoolAddresses {
-                    address: Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM")
+        orca_pre_tx_pool: PoolStates(
+            vec![(
+                Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap(),
+                OrcaPoolWithBalance {
+                    pool: OrcaPoolAddresses {
+                        address: Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM")
+                            .unwrap(),
+                        pool_a_account: Pubkey::from_str(
+                            "8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh",
+                        )
                         .unwrap(),
-                    pool_a_account: Pubkey::from_str("8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh")
+                        pool_b_account: Pubkey::from_str(
+                            "CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3",
+                        )
                         .unwrap(),
-                    pool_b_account: Pubkey::from_str("CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3")
-                        .unwrap(),
+                    },
+                    pool_a_balance: 1,
+                    pool_b_balance: 1,
+                    fees: Fees(spl_token_swap::curve::fees::Fees {
+                        trade_fee_numerator: 1,
+                        trade_fee_denominator: 10,
+                        owner_trade_fee_numerator: 1,
+                        owner_trade_fee_denominator: 10,
+                        owner_withdraw_fee_numerator: 1,
+                        owner_withdraw_fee_denominator: 10,
+                        host_fee_numerator: 1,
+                        host_fee_denominator: 10,
+                    }),
                 },
-                pool_a_balance: 1,
-                pool_b_balance: 1,
-                fees: Fees(spl_token_swap::curve::fees::Fees {
-                    trade_fee_numerator: 1,
-                    trade_fee_denominator: 10,
-                    owner_trade_fee_numerator: 1,
-                    owner_trade_fee_denominator: 10,
-                    owner_withdraw_fee_numerator: 1,
-                    owner_withdraw_fee_denominator: 10,
-                    host_fee_numerator: 1,
-                    host_fee_denominator: 10,
-                }),
-            },
-        )]
-        .into_iter()
-        .collect(),
-        orca_post_tx_pool: HashMap::new(),
+            )]
+            .into_iter()
+            .collect(),
+        ),
+        orca_post_tx_pool: PoolStates(HashMap::new()),
     };
 
     let expected_result_str = "\
