@@ -12,11 +12,6 @@ enum TradeDirection {
 pub struct PairInfo {
     pool: Pubkey,
     direction: TradeDirection,
-    // Token decimals are stored in `spl_token::state::Mint`, we currently don't
-    // store this information because it is not necessary for the rest of the
-    // program.
-    token_from_decimals: u8,
-    token_to_decimals: u8,
 }
 
 struct MevPath(Vec<PairInfo>);
@@ -49,12 +44,7 @@ impl MevPath {
                 + fees.trade_fee_numerator
                     * (fees.host_fee_denominator * fees.owner_trade_fee_denominator);
 
-            numerator *= token_balance_to
-            // TODO: `pair_info.token_from_decimals -
-            // pair_info.token_to_decimals` is probably wrong, can that be
-            // negative?!
-                * total_fee_numerator
-                * 10_u64.pow((pair_info.token_from_decimals - pair_info.token_to_decimals).into());
+            numerator *= token_balance_to * total_fee_numerator;
             denominator *= token_balance_from * total_fee_denominator;
         }
 
@@ -82,36 +72,26 @@ fn get_all_arbitrage_from_path(pre_post_pool_state: &PrePostPoolStates) {
             pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
                 .expect("Known SOL/USDC pool address"),
             direction: TradeDirection::AtoB,
-            token_from_decimals: 9,
-            token_to_decimals: 6,
         },
         PairInfo {
             pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
                 .expect("Known wstETH/USDC address"),
             direction: TradeDirection::BtoA,
-            token_from_decimals: 6,
-            token_to_decimals: 8,
         },
         PairInfo {
             pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
                 .expect("Known stSOL/wstETH address"),
             direction: TradeDirection::BtoA,
-            token_from_decimals: 9,
-            token_to_decimals: 8,
         },
         PairInfo {
             pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
                 .expect("Known stSOL/USDC address"),
             direction: TradeDirection::AtoB,
-            token_from_decimals: 9,
-            token_to_decimals: 6,
         },
         PairInfo {
             pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
                 .expect("Known SOL/USDC pool address"),
             direction: TradeDirection::BtoA,
-            token_from_decimals: 6,
-            token_to_decimals: 9,
         },
     ]);
 
