@@ -3,23 +3,27 @@ use std::str::FromStr;
 use serde::Serialize;
 use solana_sdk::pubkey::Pubkey;
 
-use super::{utils::serialize_b58, PoolStates};
+use super::{
+    utils::{deserialize_b58, serialize_b58},
+    PoolStates,
+};
 
-#[derive(Serialize)]
-enum TradeDirection {
+#[derive(Debug, Deserialize, Serialize)]
+pub enum TradeDirection {
     AtoB,
     BtoA,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct PairInfo {
     #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
     pool: Pubkey,
     direction: TradeDirection,
 }
 
-#[derive(Serialize)]
-pub struct MevPath(Vec<PairInfo>);
+#[derive(Debug, Deserialize, Serialize)]
+pub struct MevPath(pub Vec<PairInfo>);
 
 impl MevPath {
     fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<()> {
@@ -106,98 +110,90 @@ pub fn get_pre_defined_arbitrage_path(pre_post_pool_states: &PoolStates) -> Opti
 mod tests {
     use super::*;
     use crate::mev::{Fees, OrcaPoolAddresses, OrcaPoolWithBalance, PoolStates};
-    use solana_sdk::{hash::Hash, signature::Signature};
-    use std::collections::HashMap;
 
     #[test]
     fn test_get_arbitrage() {
-        let mut pre_post_pool_states = PrePostPoolStates {
-            transaction_hash: Hash::new_unique(),
-            transaction_signature: Signature::new_unique(),
-            slot: 1,
-            orca_pre_tx_pool: PoolStates(HashMap::new()),
-            orca_post_tx_pool: PoolStates(
-                vec![
-                    (
-                        Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
-                        OrcaPoolWithBalance {
-                            pool: OrcaPoolAddresses {
-                                address: Pubkey::from_str(
-                                    "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
-                                )
-                                .unwrap(),
-                                pool_a_account: Pubkey::new_unique(),
-                                pool_b_account: Pubkey::new_unique(),
-                            },
-                            pool_a_balance: 4618233234,
-                            pool_b_balance: 6400518033,
-                            fees: Fees(spl_token_swap::curve::fees::Fees {
-                                trade_fee_numerator: 25,
-                                trade_fee_denominator: 10_000,
-                                owner_trade_fee_numerator: 5,
-                                owner_trade_fee_denominator: 10_000,
-                                owner_withdraw_fee_numerator: 0,
-                                owner_withdraw_fee_denominator: 1,
-                                host_fee_numerator: 0,
-                                host_fee_denominator: 1,
-                            }),
+        let mut pool_states = PoolStates(
+            vec![
+                (
+                    Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
+                    OrcaPoolWithBalance {
+                        pool: OrcaPoolAddresses {
+                            address: Pubkey::from_str(
+                                "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
+                            )
+                            .unwrap(),
+                            pool_a_account: Pubkey::new_unique(),
+                            pool_b_account: Pubkey::new_unique(),
                         },
-                    ),
-                    (
-                        Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap(),
-                        OrcaPoolWithBalance {
-                            pool: OrcaPoolAddresses {
-                                address: Pubkey::from_str(
-                                    "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
-                                )
-                                .unwrap(),
-                                pool_a_account: Pubkey::new_unique(),
-                                pool_b_account: Pubkey::new_unique(),
-                            },
-                            pool_a_balance: 54896627850684,
-                            pool_b_balance: 13408494240,
-                            fees: Fees(spl_token_swap::curve::fees::Fees {
-                                trade_fee_numerator: 25,
-                                trade_fee_denominator: 10_000,
-                                owner_trade_fee_numerator: 5,
-                                owner_trade_fee_denominator: 10_000,
-                                owner_withdraw_fee_numerator: 0,
-                                owner_withdraw_fee_denominator: 1,
-                                host_fee_numerator: 0,
-                                host_fee_denominator: 1,
-                            }),
+                        pool_a_balance: 4618233234,
+                        pool_b_balance: 6400518033,
+                        fees: Fees(spl_token_swap::curve::fees::Fees {
+                            trade_fee_numerator: 25,
+                            trade_fee_denominator: 10_000,
+                            owner_trade_fee_numerator: 5,
+                            owner_trade_fee_denominator: 10_000,
+                            owner_withdraw_fee_numerator: 0,
+                            owner_withdraw_fee_denominator: 1,
+                            host_fee_numerator: 0,
+                            host_fee_denominator: 1,
+                        }),
+                    },
+                ),
+                (
+                    Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap(),
+                    OrcaPoolWithBalance {
+                        pool: OrcaPoolAddresses {
+                            address: Pubkey::from_str(
+                                "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
+                            )
+                            .unwrap(),
+                            pool_a_account: Pubkey::new_unique(),
+                            pool_b_account: Pubkey::new_unique(),
                         },
-                    ),
-                    (
-                        Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap(),
-                        OrcaPoolWithBalance {
-                            pool: OrcaPoolAddresses {
-                                address: Pubkey::from_str(
-                                    "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
-                                )
-                                .unwrap(),
-                                pool_a_account: Pubkey::new_unique(),
-                                pool_b_account: Pubkey::new_unique(),
-                            },
-                            pool_a_balance: 400881658679,
-                            pool_b_balance: 138436018345,
-                            fees: Fees(spl_token_swap::curve::fees::Fees {
-                                trade_fee_numerator: 25,
-                                trade_fee_denominator: 10_000,
-                                owner_trade_fee_numerator: 5,
-                                owner_trade_fee_denominator: 10_000,
-                                owner_withdraw_fee_numerator: 0,
-                                owner_withdraw_fee_denominator: 1,
-                                host_fee_numerator: 0,
-                                host_fee_denominator: 1,
-                            }),
+                        pool_a_balance: 54896627850684,
+                        pool_b_balance: 13408494240,
+                        fees: Fees(spl_token_swap::curve::fees::Fees {
+                            trade_fee_numerator: 25,
+                            trade_fee_denominator: 10_000,
+                            owner_trade_fee_numerator: 5,
+                            owner_trade_fee_denominator: 10_000,
+                            owner_withdraw_fee_numerator: 0,
+                            owner_withdraw_fee_denominator: 1,
+                            host_fee_numerator: 0,
+                            host_fee_denominator: 1,
+                        }),
+                    },
+                ),
+                (
+                    Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap(),
+                    OrcaPoolWithBalance {
+                        pool: OrcaPoolAddresses {
+                            address: Pubkey::from_str(
+                                "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
+                            )
+                            .unwrap(),
+                            pool_a_account: Pubkey::new_unique(),
+                            pool_b_account: Pubkey::new_unique(),
                         },
-                    ),
-                ]
-                .into_iter()
-                .collect(),
-            ),
-        };
+                        pool_a_balance: 400881658679,
+                        pool_b_balance: 138436018345,
+                        fees: Fees(spl_token_swap::curve::fees::Fees {
+                            trade_fee_numerator: 25,
+                            trade_fee_denominator: 10_000,
+                            owner_trade_fee_numerator: 5,
+                            owner_trade_fee_denominator: 10_000,
+                            owner_withdraw_fee_numerator: 0,
+                            owner_withdraw_fee_denominator: 1,
+                            host_fee_numerator: 0,
+                            host_fee_denominator: 1,
+                        }),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
         let path = MevPath(vec![
             PairInfo {
                 pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
@@ -216,48 +212,42 @@ mod tests {
             },
         ]);
 
-        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pre_post_pool_states);
-        assert_eq!(has_arbitrage, true);
+        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
+        assert_eq!(has_arbitrage, Some(()));
 
-        pre_post_pool_states
-            .orca_post_tx_pool
+        pool_states
             .0
             .get_mut(&Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap())
             .unwrap()
             .pool_a_balance = 461823;
-        pre_post_pool_states
-            .orca_post_tx_pool
+        pool_states
             .0
             .get_mut(&Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap())
             .unwrap()
             .pool_a_balance = 64005199;
-        pre_post_pool_states
-            .orca_post_tx_pool
+        pool_states
             .0
             .get_mut(&Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap())
             .unwrap()
             .pool_a_balance = 5489662785068;
-        pre_post_pool_states
-            .orca_post_tx_pool
+        pool_states
             .0
             .get_mut(&Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap())
             .unwrap()
             .pool_a_balance = 13408494240;
-        pre_post_pool_states
-            .orca_post_tx_pool
+        pool_states
             .0
             .get_mut(&Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap())
             .unwrap()
             .pool_a_balance = 40088165867986;
-        pre_post_pool_states
-            .orca_post_tx_pool
+        pool_states
             .0
             .get_mut(&Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap())
             .unwrap()
             .pool_a_balance = 1384360183450;
 
-        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pre_post_pool_states);
-        assert_eq!(has_arbitrage, false);
+        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
+        assert_eq!(has_arbitrage, None);
     }
 
     #[test]
