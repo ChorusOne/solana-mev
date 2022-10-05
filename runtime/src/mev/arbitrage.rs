@@ -47,12 +47,7 @@ impl MevPath {
             total_rate *= total_fee;
         }
 
-        if total_rate > 1_f64 {
-            // We have an arbitrage
-            true
-        } else {
-            false
-        }
+        total_rate > 1_f64
     }
 }
 
