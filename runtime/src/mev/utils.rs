@@ -42,10 +42,18 @@ pub fn get_mev_config_file(config_path: &PathBuf) -> MevConfig {
     toml::from_str(&config_str).expect("Could not deserialize MEV config file.")
 }
 
-#[test]
-fn test_deserialization() {
-    let sample_config: MevConfig = toml::from_str(
-        r#"
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, str::FromStr};
+
+    use crate::mev::{
+        arbitrage::{PairInfo, TradeDirection},
+        *,
+    };
+    #[test]
+    fn test_deserialization() {
+        let sample_config: MevConfig = toml::from_str(
+            r#"
     log_path = '/tmp/mev.log'
     orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
 
@@ -70,40 +78,54 @@ fn test_deserialization() {
             pool = "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
             direction = "BtoA"
     "#,
-    )
-    .expect("Failed to deserialize");
+        )
+        .expect("Failed to deserialize");
 
-    let expected_mev_config = MevConfig {
-        log_path: PathBuf::from_str("/tmp/mev.log").unwrap(),
-        orca_program_id: Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
-        orca_accounts: AllOrcaPoolAddresses(vec![
-            OrcaPoolAddresses {
-                address: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ").unwrap(),
-                pool_a_account: Pubkey::from_str("EjUNm7Lzp6X8898JiCU28SbfQBfsYoWaViXUhCgizv82")
+        let expected_mev_config = MevConfig {
+            log_path: PathBuf::from_str("/tmp/mev.log").unwrap(),
+            orca_program_id: Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP")
+                .unwrap(),
+            orca_accounts: AllOrcaPoolAddresses(vec![
+                OrcaPoolAddresses {
+                    address: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ")
+                        .unwrap(),
+                    pool_a_account: Pubkey::from_str(
+                        "EjUNm7Lzp6X8898JiCU28SbfQBfsYoWaViXUhCgizv82",
+                    )
                     .unwrap(),
-                pool_b_account: Pubkey::from_str("C1ZrV56rf1wbDzcnHY6FpNaVmzT5D8WtyEKS1FAGrboe")
+                    pool_b_account: Pubkey::from_str(
+                        "C1ZrV56rf1wbDzcnHY6FpNaVmzT5D8WtyEKS1FAGrboe",
+                    )
                     .unwrap(),
-            },
-            OrcaPoolAddresses {
-                address: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U").unwrap(),
-                pool_a_account: Pubkey::from_str("ANP74VNsHwSrq9uUSjiSNyNWvf6ZPrKTmE4gHoNd13Lg")
-                    .unwrap(),
-                pool_b_account: Pubkey::from_str("75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1")
-                    .unwrap(),
-            },
-        ]),
-        mev_paths: vec![MevPath {
-            path: vec![
-                PairInfo {
-                    pool: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ").unwrap(),
-                    direction: TradeDirection::AtoB,
                 },
-                PairInfo {
-                    pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U").unwrap(),
-                    direction: TradeDirection::BtoA,
+                OrcaPoolAddresses {
+                    address: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                        .unwrap(),
+                    pool_a_account: Pubkey::from_str(
+                        "ANP74VNsHwSrq9uUSjiSNyNWvf6ZPrKTmE4gHoNd13Lg",
+                    )
+                    .unwrap(),
+                    pool_b_account: Pubkey::from_str(
+                        "75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1",
+                    )
+                    .unwrap(),
                 },
-            ],
-        }],
-    };
-    assert_eq!(sample_config, expected_mev_config);
+            ]),
+            mev_paths: vec![MevPath {
+                path: vec![
+                    PairInfo {
+                        pool: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ")
+                            .unwrap(),
+                        direction: TradeDirection::AtoB,
+                    },
+                    PairInfo {
+                        pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                            .unwrap(),
+                        direction: TradeDirection::BtoA,
+                    },
+                ],
+            }],
+        };
+        assert_eq!(sample_config, expected_mev_config);
+    }
 }
