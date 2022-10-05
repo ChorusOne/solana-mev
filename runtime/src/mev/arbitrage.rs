@@ -1,19 +1,24 @@
 use std::str::FromStr;
 
+use serde::Serialize;
 use solana_sdk::pubkey::Pubkey;
 
-use super::PrePostPoolStates;
+use super::{utils::serialize_b58, PrePostPoolStates};
 
+#[derive(Serialize)]
 enum TradeDirection {
     AtoB,
     BtoA,
 }
 
+#[derive(Serialize)]
 pub struct PairInfo {
+    #[serde(serialize_with = "serialize_b58")]
     pool: Pubkey,
     direction: TradeDirection,
 }
 
+#[derive(Serialize)]
 struct MevPath(Vec<PairInfo>);
 
 impl MevPath {
@@ -251,5 +256,44 @@ mod tests {
 
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pre_post_pool_states);
         assert_eq!(has_arbitrage, false);
+    }
+
+    #[test]
+    fn test_serialize() {
+        let path = MevPath(vec![
+            PairInfo {
+                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                    .expect("Known SOL/USDC pool address"),
+                direction: TradeDirection::AtoB,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                    .expect("Known wstETH/USDC address"),
+                direction: TradeDirection::BtoA,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
+                    .expect("Known stSOL/wstETH address"),
+                direction: TradeDirection::BtoA,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                    .expect("Known stSOL/USDC address"),
+                direction: TradeDirection::AtoB,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                    .expect("Known SOL/USDC pool address"),
+                direction: TradeDirection::BtoA,
+            },
+        ]);
+        let expected_result = "[\
+            {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'AtoB'},\
+            {'pool':'v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG','direction':'BtoA'},\
+            {'pool':'B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy','direction':'BtoA'},\
+            {'pool':'EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL','direction':'AtoB'},\
+            {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'BtoA'}]"
+            .replace("'", "\"");
+        assert_eq!(serde_json::to_string(&path).unwrap(), expected_result);
     }
 }
