@@ -8,27 +8,30 @@ use super::{
     PoolStates,
 };
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub enum TradeDirection {
     AtoB,
     BtoA,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct PairInfo {
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
-    pool: Pubkey,
-    direction: TradeDirection,
+    pub pool: Pubkey,
+
+    pub direction: TradeDirection,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct MevPath(pub Vec<PairInfo>);
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub struct MevPath {
+    pub path: Vec<PairInfo>,
+}
 
 impl MevPath {
     fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<()> {
         let mut marginal_prices_acc = 1_f64;
-        for pair_info in &self.0 {
+        for pair_info in &self.path {
             let tokens_state = pool_states.0.get(&pair_info.pool)?;
 
             let (token_balance_from, token_balance_to) = match pair_info.direction {
@@ -74,33 +77,35 @@ pub fn get_pre_defined_arbitrage_path(pre_post_pool_states: &PoolStates) -> Opti
     // wstETH: 8
     // stSOL: 9
 
-    let path = MevPath(vec![
-        PairInfo {
-            pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                .expect("Known SOL/USDC pool address"),
-            direction: TradeDirection::AtoB,
-        },
-        PairInfo {
-            pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
-                .expect("Known wstETH/USDC address"),
-            direction: TradeDirection::BtoA,
-        },
-        PairInfo {
-            pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
-                .expect("Known stSOL/wstETH address"),
-            direction: TradeDirection::BtoA,
-        },
-        PairInfo {
-            pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
-                .expect("Known stSOL/USDC address"),
-            direction: TradeDirection::AtoB,
-        },
-        PairInfo {
-            pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                .expect("Known SOL/USDC pool address"),
-            direction: TradeDirection::BtoA,
-        },
-    ]);
+    let path = MevPath {
+        path: vec![
+            PairInfo {
+                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                    .expect("Known SOL/USDC pool address"),
+                direction: TradeDirection::AtoB,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                    .expect("Known wstETH/USDC address"),
+                direction: TradeDirection::BtoA,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
+                    .expect("Known stSOL/wstETH address"),
+                direction: TradeDirection::BtoA,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                    .expect("Known stSOL/USDC address"),
+                direction: TradeDirection::AtoB,
+            },
+            PairInfo {
+                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                    .expect("Known SOL/USDC pool address"),
+                direction: TradeDirection::BtoA,
+            },
+        ],
+    };
 
     path.does_arbitrage_opportunity_exist(pre_post_pool_states)
         .and(Some(path))
@@ -194,23 +199,25 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let path = MevPath(vec![
-            PairInfo {
-                pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
-                    .expect("wstETH/USDC"),
-                direction: TradeDirection::BtoA,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
-                    .expect("stSOL/wstETH"),
-                direction: TradeDirection::BtoA,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
-                    .expect("stSOL/USDC"),
-                direction: TradeDirection::AtoB,
-            },
-        ]);
+        let path = MevPath {
+            path: vec![
+                PairInfo {
+                    pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                        .expect("wstETH/USDC"),
+                    direction: TradeDirection::BtoA,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
+                        .expect("stSOL/wstETH"),
+                    direction: TradeDirection::BtoA,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                        .expect("stSOL/USDC"),
+                    direction: TradeDirection::AtoB,
+                },
+            ],
+        };
 
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
         assert_eq!(has_arbitrage, Some(()));
@@ -252,39 +259,41 @@ mod tests {
 
     #[test]
     fn test_serialize() {
-        let path = MevPath(vec![
-            PairInfo {
-                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                    .expect("Known SOL/USDC pool address"),
-                direction: TradeDirection::AtoB,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
-                    .expect("Known wstETH/USDC address"),
-                direction: TradeDirection::BtoA,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
-                    .expect("Known stSOL/wstETH address"),
-                direction: TradeDirection::BtoA,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
-                    .expect("Known stSOL/USDC address"),
-                direction: TradeDirection::AtoB,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                    .expect("Known SOL/USDC pool address"),
-                direction: TradeDirection::BtoA,
-            },
-        ]);
-        let expected_result = "[\
+        let path = MevPath {
+            path: vec![
+                PairInfo {
+                    pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                        .expect("Known SOL/USDC pool address"),
+                    direction: TradeDirection::AtoB,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                        .expect("Known wstETH/USDC address"),
+                    direction: TradeDirection::BtoA,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
+                        .expect("Known stSOL/wstETH address"),
+                    direction: TradeDirection::BtoA,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                        .expect("Known stSOL/USDC address"),
+                    direction: TradeDirection::AtoB,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                        .expect("Known SOL/USDC pool address"),
+                    direction: TradeDirection::BtoA,
+                },
+            ],
+        };
+        let expected_result = "{'path':[\
             {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'AtoB'},\
             {'pool':'v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG','direction':'BtoA'},\
             {'pool':'B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy','direction':'BtoA'},\
             {'pool':'EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL','direction':'AtoB'},\
-            {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'BtoA'}]"
+            {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'BtoA'}]}"
             .replace("'", "\"");
         assert_eq!(serde_json::to_string(&path).unwrap(), expected_result);
     }

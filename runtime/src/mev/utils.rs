@@ -3,18 +3,24 @@ use std::{fs::read_to_string, path::PathBuf, str::FromStr};
 use serde::{Deserialize, Deserializer, Serializer};
 use solana_sdk::pubkey::Pubkey;
 
-use super::OrcaPoolAddresses;
+use super::{arbitrage::MevPath, OrcaPoolAddresses};
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct AllOrcaPoolAddresses(pub Vec<OrcaPoolAddresses>);
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct MevConfig {
     pub log_path: PathBuf,
+
     #[serde(deserialize_with = "deserialize_b58")]
     pub orca_program_id: Pubkey,
+
     #[serde(rename(deserialize = "orca_account"))]
     pub orca_accounts: AllOrcaPoolAddresses,
+
+    /// Specify paths to look for MEV opportunities.
+    // #[serde(rename(deserialize = "mev_path"))]
+    pub mev_paths: Vec<MevPath>,
 }
 
 /// Function to use when serializing a public key, to print it using base58.
@@ -42,6 +48,7 @@ fn test_deserialization() {
         r#"
     log_path = '/tmp/mev.log'
     orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
+
     [[orca_account]]
         _id = 'USDC/USDT[stable]'
         address = 'FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ'
@@ -53,6 +60,15 @@ fn test_deserialization() {
         address = 'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U'
         pool_a_account = 'ANP74VNsHwSrq9uUSjiSNyNWvf6ZPrKTmE4gHoNd13Lg'
         pool_b_account = '75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1'
+    
+    [[mev_paths]]
+        [[mev_paths.path]]
+            pool = "FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ"
+            direction = "AtoB"
+        
+        [[mev_paths.path]]
+            pool = "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
+            direction = "BtoA"
     "#,
     )
     .expect("Failed to deserialize");
@@ -76,6 +92,18 @@ fn test_deserialization() {
                     .unwrap(),
             },
         ]),
+        mev_paths: vec![MevPath {
+            path: vec![
+                PairInfo {
+                    pool: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ").unwrap(),
+                    direction: TradeDirection::AtoB,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U").unwrap(),
+                    direction: TradeDirection::BtoA,
+                },
+            ],
+        }],
     };
     assert_eq!(sample_config, expected_mev_config);
 }
