@@ -17,7 +17,7 @@ pub struct PairInfo {
 struct MevPath(Vec<PairInfo>);
 
 impl MevPath {
-    fn get_arbitrage(&self, pre_post_pool_states: &PrePostPoolStates) -> bool {
+    fn does_arbitrage_opportunity_exist(&self, pre_post_pool_states: &PrePostPoolStates) -> bool {
         let mut total_rate = 1_f64;
         for pair_info in &self.0 {
             let tokens_state = pre_post_pool_states
@@ -92,7 +92,7 @@ fn get_pre_defined_arbitrage_from_path(pre_post_pool_states: &PrePostPoolStates)
         },
     ]);
 
-    path.get_arbitrage(pre_post_pool_states)
+    path.does_arbitrage_opportunity_exist(pre_post_pool_states)
 }
 
 #[cfg(test)]
@@ -209,7 +209,7 @@ mod tests {
             },
         ]);
 
-        let has_arbitrage = path.get_arbitrage(&pre_post_pool_states);
+        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pre_post_pool_states);
         assert_eq!(has_arbitrage, true);
 
         pre_post_pool_states
@@ -249,7 +249,7 @@ mod tests {
             .unwrap()
             .pool_a_balance = 1384360183450;
 
-        let has_arbitrage = path.get_arbitrage(&pre_post_pool_states);
+        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pre_post_pool_states);
         assert_eq!(has_arbitrage, false);
     }
 }
