@@ -3,7 +3,7 @@ use std::str::FromStr;
 use serde::Serialize;
 use solana_sdk::pubkey::Pubkey;
 
-use super::{utils::serialize_b58, PrePostPoolStates};
+use super::{utils::serialize_b58, PoolStates};
 
 #[derive(Serialize)]
 enum TradeDirection {
@@ -19,17 +19,13 @@ pub struct PairInfo {
 }
 
 #[derive(Serialize)]
-struct MevPath(Vec<PairInfo>);
+pub struct MevPath(Vec<PairInfo>);
 
 impl MevPath {
-    fn does_arbitrage_opportunity_exist(&self, pre_post_pool_states: &PrePostPoolStates) -> bool {
+    fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<()> {
         let mut marginal_prices_acc = 1_f64;
         for pair_info in &self.0 {
-            let tokens_state = pre_post_pool_states
-                .orca_post_tx_pool
-                .0
-                .get(&pair_info.pool)
-                .unwrap();
+            let tokens_state = pool_states.0.get(&pair_info.pool)?;
 
             let (token_balance_from, token_balance_to) = match pair_info.direction {
                 TradeDirection::AtoB => (
@@ -52,11 +48,16 @@ impl MevPath {
             marginal_prices_acc *= total_fee;
         }
 
-        marginal_prices_acc > 1_f64
+        if marginal_prices_acc > 1_f64 {
+            Some(())
+        } else {
+            None
+        }
     }
 }
 
-fn get_pre_defined_arbitrage_from_path(pre_post_pool_states: &PrePostPoolStates) -> bool {
+/// Hard-code some arbitrages and return if there's an opportunity or not
+pub fn get_pre_defined_arbitrage_path(pre_post_pool_states: &PoolStates) -> Option<MevPath> {
     // wSOL->USDC->wstETH->stSOL->USDC->wSOL
     // wSOL/USDC: EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U
     // wstETH/USDC: v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG
@@ -98,6 +99,7 @@ fn get_pre_defined_arbitrage_from_path(pre_post_pool_states: &PrePostPoolStates)
     ]);
 
     path.does_arbitrage_opportunity_exist(pre_post_pool_states)
+        .and(Some(path))
 }
 
 #[cfg(test)]
