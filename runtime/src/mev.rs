@@ -21,7 +21,10 @@ use crate::{
     mev::utils::{deserialize_b58, serialize_b58},
 };
 
-use self::utils::{AllOrcaPoolAddresses, MevConfig};
+use self::{
+    arbitrage::{get_pre_defined_arbitrage_path, MevPath},
+    utils::{AllOrcaPoolAddresses, MevConfig},
+};
 
 /// MevLog saves the `log_send_channel` channel, where it can be passed and
 /// cloned in the `Bank` structure. We spawn a thread on the initialization of
@@ -113,6 +116,7 @@ impl Serialize for PoolStates {
 
 pub enum MevMsg {
     Log(PrePostPoolStates),
+    Opportunity(MevPath),
     Exit,
 }
 
@@ -224,6 +228,8 @@ impl Mev {
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)
             .ok()?;
+        let mev_path_opt = get_pre_defined_arbitrage_path(&post_tx_pool_state);
+
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
             transaction_signature: *tx.signature(),
@@ -231,7 +237,12 @@ impl Mev {
             orca_pre_tx_pool: pre_tx_pool_state,
             orca_post_tx_pool: post_tx_pool_state,
         })) {
-            error!("[MEV] Could not log arbitrage, error: {}", err);
+            error!("[MEV] Could not log pool states, error: {}", err);
+        }
+        if let Some(mev_path) = mev_path_opt {
+            if let Err(err) = self.log_send_channel.send(MevMsg::Opportunity(mev_path)) {
+                error!("[MEV] Could not log arbitrage, error: {}", err);
+            }
         }
 
         // TODO: Return something once we exploit arbitrage opportunities.
@@ -256,7 +267,14 @@ impl MevLog {
                     "{}",
                     serde_json::to_string(&msg).expect("Constructed by us, should never fail")
                 )
-                .expect("[MEV] Could not write to file"),
+                .expect("[MEV] Could not write log to file"),
+
+                Ok(MevMsg::Opportunity(mev_path)) => writeln!(
+                    file,
+                    "{}",
+                    serde_json::to_string(&mev_path).expect("Constructed by us, should never fail")
+                )
+                .expect("[MEV] Could not write log opportunity to file"),
 
                 Ok(MevMsg::Exit) => break,
                 Err(err) => error!("[MEV] Could not log arbitrage on file, error: {}", err),
