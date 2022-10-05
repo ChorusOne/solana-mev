@@ -22,7 +22,7 @@ use crate::{
 };
 
 use self::{
-    arbitrage::{get_pre_defined_arbitrage_path, MevPath},
+    arbitrage::{get_arbitrage_idxs, MevPath},
     utils::{AllOrcaPoolAddresses, MevConfig},
 };
 
@@ -44,6 +44,9 @@ pub struct Mev {
     // modifies the data we are interested in.
     // TODO: Change this to pairs we are willing to trade on.
     pub orca_monitored_accounts: Arc<AllOrcaPoolAddresses>,
+
+    // MEV paths that we are interested on finding an opportunity
+    pub mev_paths: Vec<MevPath>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -116,7 +119,7 @@ impl Serialize for PoolStates {
 
 pub enum MevMsg {
     Log(PrePostPoolStates),
-    Opportunity(MevPath),
+    Opportunities(Vec<usize>),
     Exit,
 }
 
@@ -145,6 +148,7 @@ impl Mev {
             log_send_channel,
             orca_program: config.orca_program_id,
             orca_monitored_accounts: Arc::new(config.orca_accounts),
+            mev_paths: config.mev_paths,
         }
     }
 
@@ -228,7 +232,7 @@ impl Mev {
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)
             .ok()?;
-        let mev_path_opt = get_pre_defined_arbitrage_path(&post_tx_pool_state);
+        let mev_idxs_opt = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
 
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
@@ -239,8 +243,8 @@ impl Mev {
         })) {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
-        if let Some(mev_path) = mev_path_opt {
-            if let Err(err) = self.log_send_channel.send(MevMsg::Opportunity(mev_path)) {
+        if let Some(mev_idxs) = mev_idxs_opt {
+            if let Err(err) = self.log_send_channel.send(MevMsg::Opportunities(mev_idxs)) {
                 error!("[MEV] Could not log arbitrage, error: {}", err);
             }
         }
@@ -260,6 +264,7 @@ impl MevLog {
             .expect("Failed while creating/opening MEV log file");
         let (log_send_channel, log_receiver) = unbounded();
 
+        let mev_paths = mev_config.mev_paths.clone();
         let thread_handle = std::thread::spawn(move || loop {
             match log_receiver.recv() {
                 Ok(MevMsg::Log(msg)) => writeln!(
@@ -269,12 +274,17 @@ impl MevLog {
                 )
                 .expect("[MEV] Could not write log to file"),
 
-                Ok(MevMsg::Opportunity(mev_path)) => writeln!(
-                    file,
-                    "{{\"event\":\"opportunity\",\"data\":{}}}",
-                    serde_json::to_string(&mev_path).expect("Constructed by us, should never fail")
-                )
-                .expect("[MEV] Could not write log opportunity to file"),
+                Ok(MevMsg::Opportunities(mev_idxs)) => {
+                    let mev_paths: Vec<&MevPath> =
+                        mev_idxs.into_iter().map(|i| &mev_paths[i]).collect();
+                    writeln!(
+                        file,
+                        "{{\"event\":\"opportunity\",\"data\":{}}}",
+                        serde_json::to_string(&mev_paths)
+                            .expect("Constructed by us, should never fail")
+                    )
+                    .expect("[MEV] Could not write log opportunity to file")
+                }
 
                 Ok(MevMsg::Exit) => break,
                 Err(err) => error!("[MEV] Could not log arbitrage on file, error: {}", err),
