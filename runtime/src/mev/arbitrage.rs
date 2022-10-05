@@ -18,7 +18,7 @@ struct MevPath(Vec<PairInfo>);
 
 impl MevPath {
     fn does_arbitrage_opportunity_exist(&self, pre_post_pool_states: &PrePostPoolStates) -> bool {
-        let mut total_rate = 1_f64;
+        let mut marginal_prices_acc = 1_f64;
         for pair_info in &self.0 {
             let tokens_state = pre_post_pool_states
                 .orca_post_tx_pool
@@ -43,11 +43,11 @@ impl MevPath {
             let trade_fee = fees.trade_fee_numerator as f64 / fees.trade_fee_denominator as f64;
             let total_fee = 1_f64 - (host_fee + owner_fee + trade_fee);
 
-            total_rate *= token_balance_to / token_balance_from;
-            total_rate *= total_fee;
+            marginal_prices_acc *= token_balance_to / token_balance_from;
+            marginal_prices_acc *= total_fee;
         }
 
-        total_rate > 1_f64
+        marginal_prices_acc > 1_f64
     }
 }
 
