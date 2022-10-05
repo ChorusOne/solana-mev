@@ -70,9 +70,10 @@ mod tests {
         pool_b_account = '75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1'
     
     [[mev_paths]]
+        name = "USDT->USDC->SOL"
         [[mev_paths.path]]
             pool = "FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ"
-            direction = "AtoB"
+            direction = "BtoA"
         
         [[mev_paths.path]]
             pool = "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
@@ -112,11 +113,12 @@ mod tests {
                 },
             ]),
             mev_paths: vec![MevPath {
+                name: "USDT->USDC->SOL".to_owned(),
                 path: vec![
                     PairInfo {
                         pool: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ")
                             .unwrap(),
-                        direction: TradeDirection::AtoB,
+                        direction: TradeDirection::BtoA,
                     },
                     PairInfo {
                         pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
