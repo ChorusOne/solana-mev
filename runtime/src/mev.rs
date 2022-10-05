@@ -271,7 +271,7 @@ impl MevLog {
 
                 Ok(MevMsg::Opportunity(mev_path)) => writeln!(
                     file,
-                    "{}",
+                    "{{\"event\":\"opportunity\",\"data\":{}}}",
                     serde_json::to_string(&mev_path).expect("Constructed by us, should never fail")
                 )
                 .expect("[MEV] Could not write log opportunity to file"),
