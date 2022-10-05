@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use serde::Serialize;
 use solana_sdk::pubkey::Pubkey;
 
@@ -8,13 +6,13 @@ use super::{
     PoolStates,
 };
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub enum TradeDirection {
     AtoB,
     BtoA,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub struct PairInfo {
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
@@ -23,8 +21,9 @@ pub struct PairInfo {
     pub direction: TradeDirection,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub struct MevPath {
+    pub name: String,
     pub path: Vec<PairInfo>,
 }
 
@@ -63,52 +62,16 @@ impl MevPath {
     }
 }
 
-/// Hard-code some arbitrages and return if there's an opportunity or not
-pub fn get_pre_defined_arbitrage_path(pre_post_pool_states: &PoolStates) -> Option<MevPath> {
-    // wSOL->USDC->wstETH->stSOL->USDC->wSOL
-    // wSOL/USDC: EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U
-    // wstETH/USDC: v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG
-    // stSOL/wstETH: B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy
-    // stSOL/USDC: EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL
-    // wSOL/USDC: EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U
-    //
-    // Decimals: wSOL: 9
-    // USDC: 6
-    // wstETH: 8
-    // stSOL: 9
-
-    let path = MevPath {
-        path: vec![
-            PairInfo {
-                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                    .expect("Known SOL/USDC pool address"),
-                direction: TradeDirection::AtoB,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
-                    .expect("Known wstETH/USDC address"),
-                direction: TradeDirection::BtoA,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
-                    .expect("Known stSOL/wstETH address"),
-                direction: TradeDirection::BtoA,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
-                    .expect("Known stSOL/USDC address"),
-                direction: TradeDirection::AtoB,
-            },
-            PairInfo {
-                pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                    .expect("Known SOL/USDC pool address"),
-                direction: TradeDirection::BtoA,
-            },
-        ],
-    };
-
-    path.does_arbitrage_opportunity_exist(pre_post_pool_states)
-        .and(Some(path))
+pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Option<Vec<usize>> {
+    let a = mev_paths
+        .iter()
+        .enumerate()
+        .map(|(i, path)| {
+            path.does_arbitrage_opportunity_exist(pool_states)
+                .and(Some(i))
+        })
+        .collect();
+    a
 }
 
 #[cfg(test)]
@@ -200,6 +163,7 @@ mod tests {
             .collect(),
         );
         let path = MevPath {
+            name: "stETH->USDC->wstETH->stSOL->stSOL->USDC".to_owned(),
             path: vec![
                 PairInfo {
                     pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
@@ -260,6 +224,7 @@ mod tests {
     #[test]
     fn test_serialize() {
         let path = MevPath {
+            name: "SOL->USDC->wstETH->stSOL->stSOL->USDC->SOL".to_owned(),
             path: vec![
                 PairInfo {
                     pool: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
