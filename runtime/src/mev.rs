@@ -293,7 +293,7 @@ fn test_log_serialization() {
     use std::str::FromStr;
 
     let opportunity = PrePostPoolStates {
-        transaction_hash: Hash::new_unique(),
+        transaction_hash: Hash::new(&[0; 32]),
         transaction_signature: Signature::new(&[0; 64]),
         slot: 1,
         orca_pre_tx_pool: PoolStates(
@@ -334,7 +334,7 @@ fn test_log_serialization() {
 
     let expected_result_str = "\
     {\
-        'transaction_hash':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
+        'transaction_hash':'11111111111111111111111111111111',\
         'transaction_signature':'1111111111111111111111111111111111111111111111111111111111111111',\
         'slot':1,\
         'orca_pre_tx_pool':{'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM':\
