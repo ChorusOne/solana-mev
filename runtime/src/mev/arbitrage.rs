@@ -76,6 +76,8 @@ pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Op
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use super::*;
     use crate::mev::{Fees, OrcaPoolAddresses, OrcaPoolWithBalance, PoolStates};
 
@@ -253,7 +255,9 @@ mod tests {
                 },
             ],
         };
-        let expected_result = "{'path':[\
+        let expected_result = "{\
+            'name':'SOL->USDC->wstETH->stSOL->stSOL->USDC->SOL',\
+            'path':[\
             {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'AtoB'},\
             {'pool':'v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG','direction':'BtoA'},\
             {'pool':'B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy','direction':'BtoA'},\
