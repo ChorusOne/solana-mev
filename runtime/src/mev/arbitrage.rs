@@ -63,15 +63,17 @@ impl MevPath {
 }
 
 pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Option<Vec<usize>> {
-    let a = mev_paths
-        .iter()
+    if mev_paths.is_empty() {
+        return None;
+    }
+    mev_paths
+        .into_iter()
         .enumerate()
         .map(|(i, path)| {
             path.does_arbitrage_opportunity_exist(pool_states)
                 .and(Some(i))
         })
-        .collect();
-    a
+        .collect()
 }
 
 #[cfg(test)]
@@ -184,6 +186,8 @@ mod tests {
                 },
             ],
         };
+        let arb_idxs = get_arbitrage_idxs(&[path.clone()], &pool_states);
+        assert_eq!(arb_idxs, Some(vec![0]));
 
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
         assert_eq!(has_arbitrage, Some(()));
@@ -221,6 +225,8 @@ mod tests {
 
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
         assert_eq!(has_arbitrage, None);
+        let arb_idxs = get_arbitrage_idxs(&[path], &pool_states);
+        assert_eq!(arb_idxs, None);
     }
 
     #[test]
@@ -265,5 +271,38 @@ mod tests {
             {'pool':'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U','direction':'BtoA'}]}"
             .replace("'", "\"");
         assert_eq!(serde_json::to_string(&path).unwrap(), expected_result);
+    }
+
+    #[test]
+    fn get_opportunity_with_empty_paths() {
+        let pool_states = PoolStates(
+            vec![(
+                Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
+                OrcaPoolWithBalance {
+                    pool: OrcaPoolAddresses {
+                        address: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                            .unwrap(),
+                        pool_a_account: Pubkey::new_unique(),
+                        pool_b_account: Pubkey::new_unique(),
+                    },
+                    pool_a_balance: 4618233234,
+                    pool_b_balance: 6400518033,
+                    fees: Fees(spl_token_swap::curve::fees::Fees {
+                        trade_fee_numerator: 25,
+                        trade_fee_denominator: 10_000,
+                        owner_trade_fee_numerator: 5,
+                        owner_trade_fee_denominator: 10_000,
+                        owner_withdraw_fee_numerator: 0,
+                        owner_withdraw_fee_denominator: 1,
+                        host_fee_numerator: 0,
+                        host_fee_denominator: 1,
+                    }),
+                },
+            )]
+            .into_iter()
+            .collect(),
+        );
+        let arbs = get_arbitrage_idxs(&vec![], &pool_states);
+        assert_eq!(arbs, None);
     }
 }
