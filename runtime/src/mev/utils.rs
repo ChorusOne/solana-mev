@@ -20,6 +20,7 @@ pub struct MevConfig {
 
     /// Specify paths to look for MEV opportunities.
     // #[serde(rename(deserialize = "mev_path"))]
+    #[serde(rename(deserialize = "mev_path"))]
     pub mev_paths: Vec<MevPath>,
 }
 
@@ -50,6 +51,7 @@ mod tests {
         arbitrage::{PairInfo, TradeDirection},
         *,
     };
+
     #[test]
     fn test_deserialization() {
         let sample_config: MevConfig = toml::from_str(
@@ -69,15 +71,12 @@ mod tests {
         pool_a_account = 'ANP74VNsHwSrq9uUSjiSNyNWvf6ZPrKTmE4gHoNd13Lg'
         pool_b_account = '75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1'
     
-    [[mev_paths]]
+    [[mev_path]]
         name = "USDT->USDC->SOL"
-        [[mev_paths.path]]
-            pool = "FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ"
-            direction = "BtoA"
-        
-        [[mev_paths.path]]
-            pool = "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U"
-            direction = "BtoA"
+        path = [
+            { pool = "FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ", direction = "BtoA" },
+            { pool = "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U", direction = "BtoA" },
+        ]
     "#,
         )
         .expect("Failed to deserialize");
