@@ -15,6 +15,8 @@ import toml
 from uuid import uuid4
 
 from util import (
+    TokenPool,
+    TestAccount,
     create_test_account,
     deploy_token_pool,
     solana,
@@ -26,6 +28,84 @@ from util import (
     compile_bpf_program,
     read_last_mev_log,
 )
+
+
+def create_account_and_mint_tokens(
+    test_dir: str, amount: str, mint_address: str
+) -> TestAccount:
+    id = uuid4().hex[:10]
+    token_account = create_test_account(
+        f'{test_dir}/token-{id}-account.json', fund=False
+    )
+    spl_token(
+        'create-account',
+        mint_address,
+        token_account.keypair_path,
+        '--output',
+        'json',
+    )
+    spl_token('mint', mint_address, amount, token_account.pubkey)
+    return token_account
+
+
+def create_token_pool_with_liquidity(
+    test_dir: str,
+    pool_id: str,
+    token_swap_program_id: str,
+    token_a_liquidity: str,
+    token_b_liquidity: str,
+) -> TokenPool:
+    t0_mint_keypair = create_test_account(
+        f'{test_dir}/token-{pool_id}-token-0-mint.json', fund=False
+    )
+    spl_token(
+        'create-token',
+        f'{test_dir}/token-{pool_id}-token-0-mint.json',
+        '--decimals',
+        '6',
+    )
+    t0_token_mint_address = t0_mint_keypair.pubkey
+    print(f'> Token 0 from {pool_id} pool: ', t0_mint_keypair.pubkey)
+
+    t0_account = create_test_account(
+        f'{test_dir}/token-{pool_id}-token-0-account.json', fund=False
+    )
+    spl_token(
+        'create-account',
+        t0_token_mint_address,
+        t0_account.keypair_path,
+        '--output',
+        'json',
+    )
+    spl_token('mint', t0_mint_keypair.pubkey, token_a_liquidity, t0_account.pubkey)
+    print(f'> Minted ourselves {token_a_liquidity} of token 0 from {pool_id}.')
+
+    # creates token 1 and token account
+    t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
+    spl_token('create-token', f'{test_dir}/token1-mint.json', '--decimals', '6')
+    token1_mint_address = t1_mint_keypair.pubkey
+    print('> Token 1: ', t1_mint_keypair.pubkey)
+
+    t1_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
+    spl_token(
+        'create-account',
+        token1_mint_address,
+        t1_account.keypair_path,
+        '--output',
+        'json',
+    )
+    spl_token('mint', t1_mint_keypair.pubkey, token_b_liquidity, t1_account.pubkey)
+    print(f'> Minted ourselves {token_b_liquidity} of token 1 from {pool_id}.')
+
+    token_pool = deploy_token_pool(
+        token_swap_program_id,
+        t0_account.pubkey,
+        t1_account.pubkey,
+        t0_mint_keypair.pubkey,
+        t1_mint_keypair.pubkey,
+    )
+
+    return token_pool
 
 
 # replace to use ENV vars
@@ -60,76 +140,10 @@ print('\nUploading Orca Token Swap program ...')
 token_swap_program_id = solana_program_deploy(deploy_path + '/orca_token_swap_v2.so')
 print(f'> Token swap program id is {token_swap_program_id}')
 
-# creates token 0 and token account
-t0_mint_keypair = create_test_account(f'{test_dir}/token0-mint.json', fund=False)
-spl_token('create-token', f'{test_dir}/token0-mint.json', '--decimals', '6')
-token0_mint_address = t0_mint_keypair.pubkey
-print('> Token 0: ', t0_mint_keypair.pubkey)
-
-t0_account = create_test_account(f'{test_dir}/token0-account.json', fund=False)
-spl_token(
-    'create-account', token0_mint_address, t0_account.keypair_path, '--output', 'json'
-)
-spl_token('mint', t0_mint_keypair.pubkey, '2.1', t0_account.pubkey)
-print('> Minted ourselves 2.1 token 0.')
-
-
-# creates token 1 and token account
-t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
-spl_token('create-token', f'{test_dir}/token1-mint.json', '--decimals', '6')
-token1_mint_address = t1_mint_keypair.pubkey
-print('> Token 1: ', t1_mint_keypair.pubkey)
-
-t1_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
-spl_token(
-    'create-account', token1_mint_address, t1_account.keypair_path, '--output', 'json'
-)
-spl_token('mint', t1_mint_keypair.pubkey, '2.1', t1_account.pubkey)
-print('> Minted ourselves 2.1 token 1.')
-
-print('\nSetting up pool ...')
-
-# creates pool accounts and transfer tokens
-pool_t0_keypair = create_test_account(f'{test_dir}/pool-t0.json', fund=False)
-pool_t1_keypair = create_test_account(f'{test_dir}/pool-t1.json', fund=False)
-
-spl_token('create-account', token0_mint_address, pool_t0_keypair.keypair_path)
-print('> Created account pool_token0: ', pool_t0_keypair.pubkey)
-
-spl_token('create-account', token1_mint_address, pool_t1_keypair.keypair_path)
-print('> Created account pool_token1: ', pool_t1_keypair.pubkey)
-
-spl_token(
-    'transfer',
-    token0_mint_address,
-    '1.1',
-    pool_t0_keypair.pubkey,
-    '--from',
-    t0_account.pubkey,
-)
-spl_token(
-    'transfer',
-    token1_mint_address,
-    '1.1',
-    pool_t1_keypair.pubkey,
-    '--from',
-    t1_account.pubkey,
+token_pool = create_token_pool_with_liquidity(
+    test_dir, 'P0', token_swap_program_id, '1.1', '1.1'
 )
 
-
-# get info to make sure transfer is working
-print(
-    f'> Pool owns {spl_token_balance(pool_t0_keypair.pubkey).balance_ui} of {token0_mint_address}'
-)
-print(
-    f'> Pool owns {spl_token_balance(pool_t1_keypair.pubkey).balance_ui} of {token1_mint_address}'
-)
-
-
-# create pool address
-token_pool = deploy_token_pool(
-    token_swap_program_id, pool_t0_keypair.pubkey, pool_t1_keypair.pubkey
-)
 print(f'> Token Pool created with address {token_pool.token_swap_account}')
 
 ## create toml file
@@ -140,8 +154,8 @@ d_data = {
         {
             '_id': 'T0/T1',
             'address': token_pool.token_swap_account,
-            'pool_a_account': pool_t0_keypair.pubkey,
-            'pool_b_account': pool_t1_keypair.pubkey,
+            'pool_a_account': token_pool.token_swap_a_account,
+            'pool_b_account': token_pool.token_swap_b_account,
         }
     ],
     'mev_path': [],
@@ -154,6 +168,14 @@ with open(config_file, 'w+') as f:
 test_validator = restart_validator(test_validator, config_file=config_file)
 
 print(f'\nSwapping tokens ...')
+
+print(f'> Minting ourselves some tokens')
+t0_account = create_account_and_mint_tokens(
+    test_dir, '2.1', token_pool.token_mint_a_account
+)
+t1_account = create_account_and_mint_tokens(
+    test_dir, '2.1', token_pool.token_mint_b_account
+)
 
 print(f'> Swapping directly')
 tx_hash = token_pool.swap(
