@@ -218,6 +218,29 @@ tx_hash = token_pool_p0.swap(
 mev_logs = read_mev_log('/tmp/mev.log')
 assert mev_logs[len(mev_logs) - 2]['transaction_hash'] == tx_hash
 
+assert mev_logs[len(mev_logs) - 1] == {
+    'event': 'opportunity',
+    'data': [
+        {
+            'name': 'P0->P1->P2',
+            'path': [
+                {
+                    'pool': token_pool_p0.token_swap_account,
+                    'direction': 'BtoA',
+                },
+                {
+                    'pool': token_pool_p1.token_swap_account,
+                    'direction': 'BtoA',
+                },
+                {
+                    'pool': token_pool_p2.token_swap_account,
+                    'direction': 'AtoB',
+                },
+            ],
+        }
+    ],
+}
+
 print('> Compiling the BPF program to swap with an inner program')
 compile_bpf_program(
     cargo_manifest=s_dir + '/mev-tests/helper-programs/inner-swap-program/Cargo.toml'
