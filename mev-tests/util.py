@@ -424,8 +424,9 @@ def compile_bpf_program(cargo_manifest: str) -> None:
     )
 
 
-def read_last_mev_log(log_path: str):
+def read_mev_log(log_path: str):
+    logs = []
     with open(log_path, 'r') as f:
         for line in f:
-            last_line = line
-    return json.loads(last_line)
+            logs.append(json.loads(line))
+    return logs

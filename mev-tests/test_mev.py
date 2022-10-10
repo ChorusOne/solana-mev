@@ -22,11 +22,10 @@ from util import (
     solana,
     solana_program_deploy,
     spl_token,
-    spl_token_balance,
     start_validator,
     restart_validator,
     compile_bpf_program,
-    read_last_mev_log,
+    read_mev_log,
 )
 
 
@@ -140,11 +139,20 @@ print('\nUploading Orca Token Swap program ...')
 token_swap_program_id = solana_program_deploy(deploy_path + '/orca_token_swap_v2.so')
 print(f'> Token swap program id is {token_swap_program_id}')
 
-token_pool = create_token_pool_with_liquidity(
-    test_dir, 'P0', token_swap_program_id, '1.1', '1.1'
+token_pool_p0 = create_token_pool_with_liquidity(
+    test_dir, 'P0', token_swap_program_id, '4.618233234', '6.400518033'
 )
+print(f'> Token Pool created with address {token_pool_p0.token_swap_account}')
 
-print(f'> Token Pool created with address {token_pool.token_swap_account}')
+token_pool_p1 = create_token_pool_with_liquidity(
+    test_dir, 'P1', token_swap_program_id, '54896.627850684', '13.408494240'
+)
+print(f'> Token Pool created with address {token_pool_p1.token_swap_account}')
+
+token_pool_p2 = create_token_pool_with_liquidity(
+    test_dir, 'P2', token_swap_program_id, '400.881658679', '138.436018345'
+)
+print(f'> Token Pool created with address {token_pool_p2.token_swap_account}')
 
 ## create toml file
 d_data = {
@@ -152,13 +160,34 @@ d_data = {
     'orca_program_id': token_swap_program_id,
     'orca_account': [
         {
-            '_id': 'T0/T1',
-            'address': token_pool.token_swap_account,
-            'pool_a_account': token_pool.token_swap_a_account,
-            'pool_b_account': token_pool.token_swap_b_account,
+            '_id': 'P0',
+            'address': token_pool_p0.token_swap_account,
+            'pool_a_account': token_pool_p0.token_swap_a_account,
+            'pool_b_account': token_pool_p0.token_swap_b_account,
+        },
+        {
+            '_id': 'P1',
+            'address': token_pool_p1.token_swap_account,
+            'pool_a_account': token_pool_p1.token_swap_a_account,
+            'pool_b_account': token_pool_p1.token_swap_b_account,
+        },
+        {
+            '_id': 'P2',
+            'address': token_pool_p2.token_swap_account,
+            'pool_a_account': token_pool_p2.token_swap_a_account,
+            'pool_b_account': token_pool_p2.token_swap_b_account,
+        },
+    ],
+    'mev_path': [
+        {
+            'name': 'P0->P1->P2',
+            'path': [
+                {'pool': token_pool_p0.token_swap_account, 'direction': 'BtoA'},
+                {'pool': token_pool_p1.token_swap_account, 'direction': 'BtoA'},
+                {'pool': token_pool_p2.token_swap_account, 'direction': 'AtoB'},
+            ],
         }
     ],
-    'mev_path': [],
 }
 
 with open(config_file, 'w+') as f:
@@ -171,14 +200,14 @@ print(f'\nSwapping tokens ...')
 
 print(f'> Minting ourselves some tokens')
 t0_account = create_account_and_mint_tokens(
-    test_dir, '2.1', token_pool.token_mint_a_account
+    test_dir, '2.1', token_pool_p0.token_mint_a_account
 )
 t1_account = create_account_and_mint_tokens(
-    test_dir, '2.1', token_pool.token_mint_b_account
+    test_dir, '2.1', token_pool_p0.token_mint_b_account
 )
 
 print(f'> Swapping directly')
-tx_hash = token_pool.swap(
+tx_hash = token_pool_p0.swap(
     token_a_client=t0_account.pubkey,
     token_b_client=t1_account.pubkey,
     amount=1_000,
@@ -186,8 +215,8 @@ tx_hash = token_pool.swap(
 )
 
 # check log is working for swaps
-mev_last_line = read_last_mev_log('/tmp/mev.log')
-assert mev_last_line['transaction_hash'] == tx_hash
+mev_logs = read_mev_log('/tmp/mev.log')
+assert mev_logs[len(mev_logs) - 2]['transaction_hash'] == tx_hash
 
 print('> Compiling the BPF program to swap with an inner program')
 compile_bpf_program(
@@ -202,7 +231,7 @@ inner_token_swap_program_id = solana_program_deploy(inner_swap_deploy_path)
 print(f'> Inner token swap program id is {inner_token_swap_program_id}')
 
 print('> Swapping with an inner program')
-tx_hash = token_pool.inner_swap(
+tx_hash = token_pool_p0.inner_swap(
     inner_program=inner_token_swap_program_id,
     token_a_client=t0_account.pubkey,
     token_b_client=t1_account.pubkey,
@@ -211,7 +240,7 @@ tx_hash = token_pool.inner_swap(
 )
 
 # check log is working for swaps
-mev_last_line = read_last_mev_log('/tmp/mev.log')
-assert mev_last_line['transaction_hash'] == tx_hash
+mev_logs = read_mev_log('/tmp/mev.log')
+assert mev_logs[len(mev_logs) - 2]['transaction_hash'] == tx_hash
 
 test_validator.terminate()
