@@ -144,6 +144,7 @@ d_data = {
             'pool_b_account': pool_t1_keypair.pubkey,
         }
     ],
+    'mev_path': [],
 }
 
 with open(config_file, 'w+') as f:
@@ -152,7 +153,7 @@ with open(config_file, 'w+') as f:
 ## will stop and re-start validator with toml file
 test_validator = restart_validator(test_validator, config_file=config_file)
 
-print(f'Swapping tokens ...')
+print(f'\nSwapping tokens ...')
 
 print(f'> Swapping directly')
 tx_hash = token_pool.swap(
