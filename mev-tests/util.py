@@ -238,6 +238,8 @@ class TokenPool(NamedTuple):
     token_swap_b_account: str
     pool_mint_account: str
     pool_fee_account: str
+    token_mint_a_account: str
+    token_mint_b_account: str
 
     def swap(
         self,
@@ -322,7 +324,11 @@ class TokenPool(NamedTuple):
 
 
 def deploy_token_pool(
-    token_swap_program_id: str, token_swap_a_account: str, token_swap_b_account: str
+    token_swap_program_id: str,
+    token_swap_a_account: str,
+    token_swap_b_account: str,
+    token_mint_a_account: str,
+    token_mint_b_account: str,
 ) -> TokenPool:
     init_json = json.loads(
         run(
@@ -347,6 +353,8 @@ def deploy_token_pool(
         token_swap_b_account=token_swap_b_account,
         pool_mint_account=init_json['pool_mint'],
         pool_fee_account=init_json['pool_fee'],
+        token_mint_a_account=token_mint_a_account,
+        token_mint_b_account=token_mint_b_account,
     )
 
 
