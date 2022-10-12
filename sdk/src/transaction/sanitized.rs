@@ -26,6 +26,24 @@ use {
 /// needed for the Neon EVM implementation.
 pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 
+#[derive(Debug, Clone)]
+pub struct MevPoolKeys {
+    pub pool: Pubkey,
+    pub source: Option<Pubkey>,
+    pub destination: Option<Pubkey>,
+    pub token_a: Pubkey,
+    pub token_b: Pubkey,
+    pub pool_mint: Pubkey,
+    pub pool_fee: Pubkey,
+}
+
+#[derive(Debug, Clone)]
+pub struct MevKeys {
+    pub pool_keys: Vec<MevPoolKeys>,
+    pub token_program: Pubkey,
+    pub user_authority: Option<Pubkey>,
+}
+
 /// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
 pub struct SanitizedTransaction {
@@ -34,7 +52,7 @@ pub struct SanitizedTransaction {
     is_simple_vote_tx: bool,
     signatures: Vec<Signature>,
     // Store MEV monitored accounts to be loaded.
-    pub mev_keys: Vec<[Pubkey; 3]>,
+    pub mev_keys: Option<MevKeys>,
 }
 
 /// Set of accounts that must be locked for safe transaction processing
@@ -45,7 +63,7 @@ pub struct TransactionAccountLocks<'a> {
     /// List of writable account key locks
     pub writable: Vec<&'a Pubkey>,
     /// List of MEV readonly account key locks
-    pub readonly_mev: &'a Vec<[Pubkey; 3]>,
+    pub readonly_mev: Option<&'a MevKeys>,
 }
 
 /// Type that represents whether the transaction message has been precomputed or
@@ -89,7 +107,7 @@ impl SanitizedTransaction {
             message_hash,
             is_simple_vote_tx,
             signatures,
-            mev_keys: Vec::new(),
+            mev_keys: None,
         })
     }
 
@@ -133,7 +151,7 @@ impl SanitizedTransaction {
             message_hash,
             is_simple_vote_tx,
             signatures,
-            mev_keys: Vec::new(),
+            mev_keys: None,
         })
     }
 
@@ -145,7 +163,7 @@ impl SanitizedTransaction {
             message: SanitizedMessage::Legacy(LegacyMessage::new(tx.message)),
             is_simple_vote_tx: false,
             signatures: tx.signatures,
-            mev_keys: Vec::new(),
+            mev_keys: None,
         })
     }
 
@@ -225,7 +243,7 @@ impl SanitizedTransaction {
         let mut account_locks = TransactionAccountLocks {
             writable: Vec::with_capacity(num_writable_accounts),
             readonly: Vec::with_capacity(num_readonly_accounts),
-            readonly_mev: &self.mev_keys,
+            readonly_mev: self.mev_keys.as_ref(),
         };
 
         for (i, key) in account_keys.iter().enumerate() {

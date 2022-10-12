@@ -10,20 +10,26 @@ use serde::{
     Serialize, Serializer,
 };
 use solana_sdk::{
-    account::ReadableAccount, clock::Slot, hash::Hash, pubkey::Pubkey, signature::Signature,
-    transaction::SanitizedTransaction,
+    account::ReadableAccount,
+    clock::Slot,
+    hash::Hash,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
+    signer::Signer,
+    transaction::{MevKeys, MevPoolKeys, SanitizedTransaction},
 };
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
 use spl_token_swap::state::SwapVersion;
 
 use crate::{
     accounts::LoadedTransaction,
+    inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
 };
 
 use self::{
     arbitrage::{get_arbitrage_idxs, MevPath},
-    utils::{AllOrcaPoolAddresses, MevConfig},
+    utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
 
 /// MevLog saves the `log_send_channel` channel, where it can be passed and
@@ -47,6 +53,10 @@ pub struct Mev {
 
     // MEV paths that we are interested on finding an opportunity
     pub mev_paths: Vec<MevPath>,
+
+    // Key for the user authority for signing transactions.
+    // If `None`, we do not try to craft MEV txs.
+    pub user_authority: Arc<Option<Keypair>>,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -64,6 +74,28 @@ pub struct OrcaPoolAddresses {
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
     pool_b_account: Pubkey,
+
+    /// Source address, owned by us.
+    #[serde(default)]
+    #[serde(serialize_with = "serialize_opt_b58")]
+    #[serde(deserialize_with = "deserialize_opt_b58")]
+    pub source: Option<Pubkey>,
+
+    /// Destination address, owned by us.
+    #[serde(default)]
+    #[serde(serialize_with = "serialize_opt_b58")]
+    #[serde(deserialize_with = "deserialize_opt_b58")]
+    pub destination: Option<Pubkey>,
+
+    /// Destination address, owned by the pool.
+    #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
+    pub pool_mint: Pubkey,
+
+    /// Destination address, owned by the pool.
+    #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
+    pub pool_fee: Pubkey,
 }
 
 #[derive(Debug, Serialize)]
@@ -103,6 +135,13 @@ impl Serialize for Fees {
 // serialize with `serde_json`
 #[derive(Debug)]
 pub struct PoolStates(HashMap<Pubkey, OrcaPoolWithBalance>);
+
+impl FromIterator<(Pubkey, OrcaPoolWithBalance)> for PoolStates {
+    fn from_iter<T: IntoIterator<Item = (Pubkey, OrcaPoolWithBalance)>>(iter: T) -> Self {
+        let hashmap = HashMap::from_iter(iter);
+        PoolStates(hashmap)
+    }
+}
 
 impl Serialize for PoolStates {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -149,6 +188,7 @@ impl Mev {
             orca_program: config.orca_program_id,
             orca_monitored_accounts: Arc::new(config.orca_accounts),
             mev_paths: config.mev_paths,
+            user_authority: Arc::new(None),
         }
     }
 
@@ -156,48 +196,70 @@ impl Mev {
     /// interested in watching.
     pub fn fill_tx_mev_accounts(&self, tx: &mut SanitizedTransaction) {
         if self.is_monitored_account(tx) {
-            for orca_pool in self.orca_monitored_accounts.0.iter() {
-                tx.mev_keys.push([
-                    orca_pool.address,
-                    orca_pool.pool_a_account,
-                    orca_pool.pool_b_account,
-                ]);
-            }
+            let pool_keys = self
+                .orca_monitored_accounts
+                .0
+                .iter()
+                .map(|orca_pool| MevPoolKeys {
+                    pool: orca_pool.address,
+                    source: orca_pool.source,
+                    destination: orca_pool.destination,
+                    token_a: orca_pool.pool_a_account,
+                    token_b: orca_pool.pool_b_account,
+                    pool_mint: orca_pool.pool_mint,
+                    pool_fee: orca_pool.pool_fee,
+                })
+                .collect();
+            tx.mev_keys = Some(MevKeys {
+                pool_keys,
+                // Use SPL token ID for all pools.
+                token_program: inline_spl_token::id(),
+                user_authority: (*self.user_authority).as_ref().map(|kp| kp.pubkey()),
+            })
         }
     }
 
     /// Attempts to deserialize the Orca accounts MEV is interested in,
     /// in case the deserialization fails for some reason, returns the error.
-    fn get_all_orca_monitored_accounts(
+    pub fn get_all_orca_monitored_accounts(
         &self,
         loaded_transaction: &LoadedTransaction,
-    ) -> Result<PoolStates, ProgramError> {
+    ) -> Option<Result<PoolStates, ProgramError>> {
         let pool_states = loaded_transaction
-            .mev_accounts.iter()
-            .map(|s| {
-                let [
-                    (pool_key, pool_account),
-                    (pool_a_key, pool_a_account),
-                    (pool_b_key, pool_b_account),
-                    ] = [&s[0], &s[1], &s[2]];
+            .mev_accounts
+            .as_ref()
+            .map(|mev_accounts| {
+                mev_accounts
+                    .pool_accounts
+                    .iter()
+                    .map(|mev_account| {
+                        let pool = SwapVersion::unpack(mev_account.pool.1.data())?;
+                        let pool_a_account =
+                            spl_token::state::Account::unpack(mev_account.token_a.1.data())?;
+                        let pool_b_account =
+                            spl_token::state::Account::unpack(mev_account.token_b.1.data())?;
 
-                let pool = SwapVersion::unpack(pool_account.data())?;
-
-                let pool_a_account = spl_token::state::Account::unpack(pool_a_account.data())?;
-                let pool_b_account = spl_token::state::Account::unpack(pool_b_account.data())?;
-                Ok((*pool_key, OrcaPoolWithBalance {
-                    pool: OrcaPoolAddresses {
-                        address: *pool_key,
-                        pool_a_account: *pool_a_key,
-                        pool_b_account: *pool_b_key,
-                    },
-                    pool_a_balance: pool_a_account.amount,
-                    pool_b_balance: pool_b_account.amount,
-                    fees: Fees(pool.fees().clone()),
-                }))
-            })
-            .collect::<Result<HashMap<Pubkey,OrcaPoolWithBalance>, ProgramError>>()?;
-        Ok(PoolStates(pool_states))
+                        Ok((
+                            mev_account.pool.0.clone(),
+                            OrcaPoolWithBalance {
+                                pool: OrcaPoolAddresses {
+                                    address: mev_account.pool.0.clone(),
+                                    pool_a_account: mev_account.token_a.0.clone(),
+                                    pool_b_account: mev_account.token_b.0.clone(),
+                                    source: None,
+                                    destination: None,
+                                    pool_mint: mev_account.pool_mint.0.clone(),
+                                    pool_fee: mev_account.pool_fee.0.clone(),
+                                },
+                                pool_a_balance: pool_a_account.amount,
+                                pool_b_balance: pool_b_account.amount,
+                                fees: Fees(pool.fees().clone()),
+                            },
+                        ))
+                    })
+                    .collect::<Result<PoolStates, ProgramError>>()
+            });
+        pool_states
     }
 
     pub fn is_monitored_account(&self, tx: &SanitizedTransaction) -> bool {
@@ -205,19 +267,6 @@ impl Mev {
             .account_keys()
             .iter()
             .any(|account_key| &self.orca_program == account_key)
-    }
-
-    pub fn get_pre_tx_pool_state(
-        &self,
-        tx: &SanitizedTransaction,
-        loaded_transaction: &mut LoadedTransaction,
-    ) -> Option<PoolStates> {
-        if !tx.mev_keys.is_empty() {
-            self.get_all_orca_monitored_accounts(loaded_transaction)
-                .ok()
-        } else {
-            None
-        }
     }
 
     /// Execute and log the pool state after a transaction interacted with one or more
@@ -230,7 +279,7 @@ impl Mev {
         pre_tx_pool_state: PoolStates,
     ) -> Option<()> {
         let post_tx_pool_state = self
-            .get_all_orca_monitored_accounts(loaded_transaction)
+            .get_all_orca_monitored_accounts(loaded_transaction)?
             .ok()?;
         let mev_idxs_opt = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
 
