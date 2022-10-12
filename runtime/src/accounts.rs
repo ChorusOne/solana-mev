@@ -1,3 +1,5 @@
+use solana_sdk::transaction::MevKeys;
+
 use {
     crate::{
         account_overrides::AccountOverrides,
@@ -120,13 +122,97 @@ pub struct Accounts {
     pub(crate) account_locks: Mutex<AccountLocks>,
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub struct MevPoolAccounts {
+    pub pool: TransactionAccount,
+    pub source: Option<TransactionAccount>,
+    pub destination: Option<TransactionAccount>,
+    pub token_a: TransactionAccount,
+    pub token_b: TransactionAccount,
+    pub pool_mint: TransactionAccount,
+    pub pool_fee: TransactionAccount,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct MevAccounts {
+    pub pool_accounts: Vec<MevPoolAccounts>,
+    pub token_program: TransactionAccount,
+    pub user_authority: Option<TransactionAccount>,
+}
+
+impl MevAccounts {
+    fn get_accounts_data(
+        mev_keys: &MevKeys,
+        accounts_db: &Arc<AccountsDb>,
+        ancestors: &Ancestors,
+        load_zero_lamports: LoadZeroLamports,
+    ) -> Self {
+        let mut pool_accounts = Vec::with_capacity(mev_keys.pool_keys.len());
+        for pool_keys in &mev_keys.pool_keys {
+            let (pool, _slot) = accounts_db
+                .load_with_fixed_root(ancestors, &pool_keys.pool, load_zero_lamports)
+                .unwrap_or_default();
+
+            let (token_a, _slot) = accounts_db
+                .load_with_fixed_root(ancestors, &pool_keys.token_a, load_zero_lamports)
+                .unwrap_or_default();
+
+            let (token_b, _slot) = accounts_db
+                .load_with_fixed_root(ancestors, &pool_keys.token_b, load_zero_lamports)
+                .unwrap_or_default();
+
+            let (pool_mint, _slot) = accounts_db
+                .load_with_fixed_root(ancestors, &pool_keys.pool_mint, load_zero_lamports)
+                .unwrap_or_default();
+
+            let (pool_fee, _slot) = accounts_db
+                .load_with_fixed_root(ancestors, &pool_keys.pool_fee, load_zero_lamports)
+                .unwrap_or_default();
+
+            pool_accounts.push(MevPoolAccounts {
+                pool: (pool_keys.pool, pool),
+                source: pool_keys.source.and_then(|src| {
+                    let (source, _slot) = accounts_db
+                        .load_with_fixed_root(ancestors, &src, load_zero_lamports)
+                        .unwrap_or_default();
+                    Some((src, source))
+                }),
+                destination: pool_keys.destination.and_then(|dst| {
+                    let (destination, _slot) = accounts_db
+                        .load_with_fixed_root(ancestors, &dst, load_zero_lamports)
+                        .unwrap_or_default();
+                    Some((dst, destination))
+                }),
+                token_a: (pool_keys.token_a, token_a),
+                token_b: (pool_keys.token_b, token_b),
+                pool_mint: (pool_keys.pool_mint, pool_mint),
+                pool_fee: (pool_keys.pool_fee, pool_fee),
+            });
+        }
+        let (token_program, _slot) = accounts_db
+            .load_with_fixed_root(ancestors, &mev_keys.token_program, load_zero_lamports)
+            .unwrap_or_default();
+
+        MevAccounts {
+            pool_accounts,
+            token_program: (mev_keys.token_program, token_program),
+            user_authority: mev_keys.user_authority.and_then(|user_authority| {
+                let (user_authority_account, _slot) = accounts_db
+                    .load_with_fixed_root(ancestors, &user_authority, load_zero_lamports)
+                    .unwrap_or_default();
+                Some((user_authority, user_authority_account))
+            }),
+        }
+    }
+}
+
 // for the load instructions
 pub type TransactionRent = u64;
 pub type TransactionProgramIndices = Vec<Vec<usize>>;
 #[derive(PartialEq, Debug, Clone)]
 pub struct LoadedTransaction {
     pub accounts: Vec<TransactionAccount>,
-    pub mev_accounts: Vec<[TransactionAccount; 3]>,
+    pub mev_accounts: Option<MevAccounts>,
     pub program_indices: TransactionProgramIndices,
     pub rent: TransactionRent,
     pub rent_debits: RentDebits,
@@ -269,7 +355,6 @@ impl Accounts {
             let account_keys = message.account_keys();
             let mut accounts = Vec::with_capacity(account_keys.len());
             let mut account_deps = Vec::with_capacity(account_keys.len());
-            let mut mev_accounts = Vec::with_capacity(tx.mev_keys.len());
             let mut rent_debits = RentDebits::default();
             let preserve_rent_epoch_for_rent_exempt_accounts = feature_set
                 .is_active(&feature_set::preserve_rent_epoch_for_rent_exempt_accounts::id());
@@ -373,16 +458,15 @@ impl Accounts {
                 accounts.push((*key, account));
             }
 
-            for triplet in tx.mev_keys.iter() {
-                let loaded_accounts_tuple = triplet.map(|k| {
-                    let (mev_account, _slot) = self
-                        .accounts_db
-                        .load_with_fixed_root(ancestors, &k, load_zero_lamports)
-                        .unwrap_or_default();
-                    (k, mev_account)
-                });
-                mev_accounts.push(loaded_accounts_tuple);
-            }
+            let mev_accounts = tx.mev_keys.as_ref().map(|mev_keys| {
+                MevAccounts::get_accounts_data(
+                    &mev_keys,
+                    &self.accounts_db,
+                    ancestors,
+                    load_zero_lamports,
+                )
+            });
+
             debug_assert_eq!(accounts.len(), account_keys.len());
             // Appends the account_deps at the end of the accounts,
             // this way they can be accessed in a uniform way.
@@ -1063,7 +1147,7 @@ impl Accounts {
         account_locks: &mut AccountLocks,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
-        mev_keys: &Vec<[Pubkey; 3]>,
+        mev_keys: Option<&MevKeys>,
     ) -> Result<()> {
         for k in writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
@@ -1088,15 +1172,61 @@ impl Accounts {
             }
         }
 
-        for triplet in mev_keys {
-            for k in triplet {
-                // Account is already locked for writing.
-                if account_locks.is_locked_write(k) {
-                    continue;
+        if let Some(mev_keys) = mev_keys {
+            // Can't lock token program for write.
+            if !account_locks.lock_readonly(&mev_keys.token_program) {
+                account_locks.insert_new_readonly(&mev_keys.token_program);
+            }
+
+            // Can't lock token program for write.
+            if let Some(user_authority) = mev_keys.user_authority {
+                if !account_locks.lock_readonly(&user_authority) {
+                    account_locks.insert_new_readonly(&user_authority);
                 }
-                // Account is not locked for read.
-                if !account_locks.lock_readonly(k) {
-                    account_locks.insert_new_readonly(k);
+            }
+
+            for pool_keys in &mev_keys.pool_keys {
+                if !account_locks.is_locked_write(&pool_keys.pool)
+                    && !account_locks.lock_readonly(&pool_keys.pool)
+                {
+                    account_locks.insert_new_readonly(&pool_keys.pool);
+                }
+
+                if let Some(source) = pool_keys.source {
+                    if !account_locks.is_locked_write(&source)
+                        && !account_locks.lock_readonly(&source)
+                    {
+                        account_locks.insert_new_readonly(&source);
+                    }
+                }
+
+                if let Some(destination) = pool_keys.destination {
+                    if !account_locks.is_locked_write(&destination)
+                        && !account_locks.lock_readonly(&destination)
+                    {
+                        account_locks.insert_new_readonly(&destination);
+                    }
+                }
+
+                if !account_locks.is_locked_write(&pool_keys.token_a)
+                    && !account_locks.lock_readonly(&pool_keys.token_a)
+                {
+                    account_locks.insert_new_readonly(&pool_keys.token_a);
+                }
+                if !account_locks.is_locked_write(&pool_keys.token_b)
+                    && !account_locks.lock_readonly(&pool_keys.token_b)
+                {
+                    account_locks.insert_new_readonly(&pool_keys.token_b);
+                }
+                if !account_locks.is_locked_write(&pool_keys.pool_mint)
+                    && !account_locks.lock_readonly(&pool_keys.pool_mint)
+                {
+                    account_locks.insert_new_readonly(&pool_keys.pool_mint);
+                }
+                if !account_locks.is_locked_write(&pool_keys.pool_fee)
+                    && !account_locks.lock_readonly(&pool_keys.pool_fee)
+                {
+                    account_locks.insert_new_readonly(&pool_keys.pool_fee);
                 }
             }
         }
@@ -1109,17 +1239,48 @@ impl Accounts {
         account_locks: &mut AccountLocks,
         writable_keys: Vec<&Pubkey>,
         readonly_keys: Vec<&Pubkey>,
-        mev_keys: &Vec<[Pubkey; 3]>,
+        mev_keys: Option<&MevKeys>,
     ) {
-        for triplet in mev_keys {
-            for k in triplet {
-                // Account was locked for write, we shouldn't try to unlock it.
-                if account_locks.is_locked_write(k) {
-                    continue;
+        if let Some(mev_keys) = mev_keys {
+            account_locks.unlock_readonly(&mev_keys.token_program);
+            if let Some(user_authority) = mev_keys.user_authority {
+                account_locks.unlock_readonly(&user_authority);
+            }
+            for pool_keys in &mev_keys.pool_keys {
+                if !account_locks.is_locked_write(&pool_keys.pool) {
+                    account_locks.unlock_readonly(&pool_keys.pool);
                 }
-                account_locks.unlock_readonly(k);
+
+                if let Some(source) = pool_keys.source {
+                    if !account_locks.is_locked_write(&source) {
+                        account_locks.unlock_readonly(&source);
+                    }
+                }
+
+                if let Some(destination) = pool_keys.destination {
+                    if !account_locks.is_locked_write(&destination) {
+                        account_locks.unlock_readonly(&destination);
+                    }
+                }
+
+                if !account_locks.is_locked_write(&pool_keys.token_a) {
+                    account_locks.unlock_readonly(&pool_keys.token_a);
+                }
+
+                if !account_locks.is_locked_write(&pool_keys.token_b) {
+                    account_locks.unlock_readonly(&pool_keys.token_b);
+                }
+
+                if !account_locks.is_locked_write(&pool_keys.pool_mint) {
+                    account_locks.unlock_readonly(&pool_keys.pool_mint);
+                }
+
+                if !account_locks.is_locked_write(&pool_keys.pool_fee) {
+                    account_locks.unlock_readonly(&pool_keys.pool_fee);
+                }
             }
         }
+
         for k in writable_keys {
             account_locks.unlock_write(k);
         }

@@ -22,11 +22,24 @@ pub struct MevConfig {
     // #[serde(rename(deserialize = "mev_path"))]
     #[serde(rename(deserialize = "mev_path"))]
     pub mev_paths: Vec<MevPath>,
+
+    pub user_authority_path: Option<PathBuf>,
 }
 
 /// Function to use when serializing a public key, to print it using base58.
 pub fn serialize_b58<S: Serializer, T: ToString>(x: &T, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&x.to_string())
+}
+
+/// Function to use when serializing a public key, to print it using base58.
+pub fn serialize_opt_b58<S: Serializer, T: ToString>(
+    x: &Option<T>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match x {
+        Some(x) => serializer.serialize_str(&x.to_string()),
+        None => serializer.serialize_none(),
+    }
 }
 
 /// Function to use when deserializing a public key.
@@ -36,6 +49,20 @@ where
 {
     let buf = String::deserialize(deserializer)?;
     Pubkey::from_str(&buf).map_err(serde::de::Error::custom)
+}
+
+/// Function to use when deserializing a public key.
+pub fn deserialize_opt_b58<'de, D>(deserializer: D) -> Result<Option<Pubkey>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<String>::deserialize(deserializer)? {
+        Some(str) => {
+            let pubkey = Pubkey::from_str(&str).map_err(serde::de::Error::custom)?;
+            Ok(Some(pubkey))
+        }
+        None => Ok(None),
+    }
 }
 
 pub fn get_mev_config_file(config_path: &PathBuf) -> MevConfig {

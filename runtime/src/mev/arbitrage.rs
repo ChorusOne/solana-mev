@@ -1,5 +1,13 @@
 use serde::Serialize;
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{
+    hash::Hash,
+    instruction::{AccountMeta, Instruction},
+    pubkey::Pubkey,
+    signature::Keypair,
+    signer::Signer,
+    transaction::{SanitizedTransaction, Transaction},
+};
+use spl_token_swap::instruction::{Swap, SwapInstruction};
 
 use super::{
     utils::{deserialize_b58, serialize_b58},
@@ -74,6 +82,52 @@ pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Op
                 .and(Some(i))
         })
         .collect()
+}
+
+fn create_swap_tx(
+    program_id: &Pubkey,
+    swap_pubkey: &Pubkey,
+    authority_pubkey: &Pubkey,
+    user_transfer_authority: &Keypair,
+    source_pubkey: &Pubkey,
+    swap_source_pubkey: &Pubkey,
+    swap_destination_pubkey: &Pubkey,
+    destination_pubkey: &Pubkey,
+    pool_mint_pubkey: &Pubkey,
+    pool_fee_pubkey: &Pubkey,
+    token_program: &Pubkey,
+    instruction: Swap,
+    blockhash: Hash,
+) {
+    let data = SwapInstruction::Swap(instruction).pack();
+
+    let accounts = vec![
+        AccountMeta::new_readonly(*swap_pubkey, false),
+        AccountMeta::new_readonly(*authority_pubkey, false),
+        AccountMeta::new_readonly(user_transfer_authority.pubkey(), true),
+        AccountMeta::new(*source_pubkey, false),
+        AccountMeta::new(*swap_source_pubkey, false),
+        AccountMeta::new(*swap_destination_pubkey, false),
+        AccountMeta::new(*destination_pubkey, false),
+        AccountMeta::new(*pool_mint_pubkey, false),
+        AccountMeta::new(*pool_fee_pubkey, false),
+        AccountMeta::new_readonly(*token_program, false),
+    ];
+
+    let swap_ix = Instruction {
+        program_id: *program_id,
+        accounts,
+        data,
+    };
+
+    let signed_tx = Transaction::new_signed_with_payer(
+        &[swap_ix],
+        Some(&user_transfer_authority.pubkey()),
+        &[user_transfer_authority],
+        blockhash,
+    );
+
+    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(signed_tx).unwrap();
 }
 
 #[cfg(test)]

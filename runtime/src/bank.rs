@@ -4203,9 +4203,8 @@ impl Bank {
                     };
 
                     // Before executing `tx`, are we interested in the pool state?
-                    let pre_tx_pool_state = mev
-                        .as_ref()
-                        .and_then(|mev| mev.get_pre_tx_pool_state(tx, loaded_transaction));
+                    let pre_tx_pool_state =
+                        mev.and_then(|mev| mev.get_all_orca_monitored_accounts(loaded_transaction));
 
                     let tx_result = self.execute_loaded_transaction(
                         tx,
@@ -4218,7 +4217,7 @@ impl Bank {
                         &mut error_counters,
                     );
                     execution_results.push(tx_result);
-                    if let Some(pre_pool_state) = pre_tx_pool_state {
+                    if let Some(Ok(pre_pool_state)) = pre_tx_pool_state {
                         let mev = mev
                             .as_ref()
                             .expect("Is Some because we have a pre pool state.");
