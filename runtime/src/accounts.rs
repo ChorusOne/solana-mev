@@ -1191,41 +1191,9 @@ impl Accounts {
         mev_keys: Option<&MevKeys>,
     ) {
         if let Some(mev_keys) = mev_keys {
-            account_locks.unlock_readonly(&mev_keys.token_program);
-            if let Some(user_authority) = mev_keys.user_authority {
-                account_locks.unlock_readonly(&user_authority);
-            }
-            for pool_keys in &mev_keys.pool_keys {
-                if !account_locks.is_locked_write(&pool_keys.pool) {
-                    account_locks.unlock_readonly(&pool_keys.pool);
-                }
-
-                if let Some(source) = pool_keys.source {
-                    if !account_locks.is_locked_write(&source) {
-                        account_locks.unlock_readonly(&source);
-                    }
-                }
-
-                if let Some(destination) = pool_keys.destination {
-                    if !account_locks.is_locked_write(&destination) {
-                        account_locks.unlock_readonly(&destination);
-                    }
-                }
-
-                if !account_locks.is_locked_write(&pool_keys.token_a) {
-                    account_locks.unlock_readonly(&pool_keys.token_a);
-                }
-
-                if !account_locks.is_locked_write(&pool_keys.token_b) {
-                    account_locks.unlock_readonly(&pool_keys.token_b);
-                }
-
-                if !account_locks.is_locked_write(&pool_keys.pool_mint) {
-                    account_locks.unlock_readonly(&pool_keys.pool_mint);
-                }
-
-                if !account_locks.is_locked_write(&pool_keys.pool_fee) {
-                    account_locks.unlock_readonly(&pool_keys.pool_fee);
+            for k in &mev_keys.get_acconts_to_lock_readonly() {
+                if !account_locks.is_locked_write(&k) {
+                    account_locks.unlock_readonly(k);
                 }
             }
         }
