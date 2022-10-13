@@ -1173,62 +1173,9 @@ impl Accounts {
         }
 
         if let Some(mev_keys) = mev_keys {
-            if !account_locks.is_locked_write(&mev_keys.token_program)
-                && !account_locks.lock_readonly(&mev_keys.token_program)
-            {
-                account_locks.insert_new_readonly(&mev_keys.token_program);
-            }
-
-            if let Some(user_authority) = mev_keys.user_authority {
-                if !account_locks.is_locked_write(&user_authority)
-                    && !account_locks.lock_readonly(&user_authority)
-                {
-                    account_locks.insert_new_readonly(&user_authority);
-                }
-            }
-
-            for pool_keys in &mev_keys.pool_keys {
-                if !account_locks.is_locked_write(&pool_keys.pool)
-                    && !account_locks.lock_readonly(&pool_keys.pool)
-                {
-                    account_locks.insert_new_readonly(&pool_keys.pool);
-                }
-
-                if let Some(source) = pool_keys.source {
-                    if !account_locks.is_locked_write(&source)
-                        && !account_locks.lock_readonly(&source)
-                    {
-                        account_locks.insert_new_readonly(&source);
-                    }
-                }
-
-                if let Some(destination) = pool_keys.destination {
-                    if !account_locks.is_locked_write(&destination)
-                        && !account_locks.lock_readonly(&destination)
-                    {
-                        account_locks.insert_new_readonly(&destination);
-                    }
-                }
-
-                if !account_locks.is_locked_write(&pool_keys.token_a)
-                    && !account_locks.lock_readonly(&pool_keys.token_a)
-                {
-                    account_locks.insert_new_readonly(&pool_keys.token_a);
-                }
-                if !account_locks.is_locked_write(&pool_keys.token_b)
-                    && !account_locks.lock_readonly(&pool_keys.token_b)
-                {
-                    account_locks.insert_new_readonly(&pool_keys.token_b);
-                }
-                if !account_locks.is_locked_write(&pool_keys.pool_mint)
-                    && !account_locks.lock_readonly(&pool_keys.pool_mint)
-                {
-                    account_locks.insert_new_readonly(&pool_keys.pool_mint);
-                }
-                if !account_locks.is_locked_write(&pool_keys.pool_fee)
-                    && !account_locks.lock_readonly(&pool_keys.pool_fee)
-                {
-                    account_locks.insert_new_readonly(&pool_keys.pool_fee);
+            for k in &mev_keys.get_acconts_to_lock_readonly() {
+                if !account_locks.is_locked_write(k) && !account_locks.lock_readonly(k) {
+                    account_locks.insert_new_readonly(k);
                 }
             }
         }

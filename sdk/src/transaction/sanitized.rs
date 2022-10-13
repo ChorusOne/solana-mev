@@ -43,6 +43,34 @@ pub struct MevKeys {
     pub user_authority: Option<Pubkey>,
 }
 
+impl MevKeys {
+    pub fn get_acconts_to_lock_readonly(&self) -> Vec<Pubkey> {
+        let mut read_only_accounts = Vec::with_capacity(7 * self.pool_keys.len() + 2);
+        for pool_keys in &self.pool_keys {
+            read_only_accounts.push(pool_keys.pool);
+            read_only_accounts.push(pool_keys.token_a);
+            read_only_accounts.push(pool_keys.token_b);
+            read_only_accounts.push(pool_keys.pool_mint);
+            read_only_accounts.push(pool_keys.pool_fee);
+            if let Some(source) = pool_keys.source {
+                read_only_accounts.push(source);
+            }
+            if let Some(destination) = pool_keys.destination {
+                read_only_accounts.push(destination);
+            }
+        }
+        if let Some(user_authority) = self.user_authority {
+            read_only_accounts.push(user_authority);
+        }
+        read_only_accounts.push(self.token_program);
+        read_only_accounts
+    }
+
+    pub fn get_acconts_to_lock_write(&self) -> Vec<Pubkey> {
+        todo!()
+    }
+}
+
 /// Sanitized transaction and the hash of its message
 #[derive(Debug, Clone)]
 pub struct SanitizedTransaction {
