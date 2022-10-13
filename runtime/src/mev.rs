@@ -87,12 +87,12 @@ pub struct OrcaPoolAddresses {
     #[serde(deserialize_with = "deserialize_opt_b58")]
     pub destination: Option<Pubkey>,
 
-    /// Destination address, owned by the pool.
+    /// Pool's mint account.
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
     pub pool_mint: Pubkey,
 
-    /// Destination address, owned by the pool.
+    /// Pool's fee account.
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
     pub pool_fee: Pubkey,
