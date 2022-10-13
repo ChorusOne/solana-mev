@@ -3188,7 +3188,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                mev_accounts: vec![],
+                mev_accounts: None,
             }),
             None,
         );
@@ -3199,7 +3199,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                mev_accounts: vec![],
+                mev_accounts: None,
             }),
             None,
         );
@@ -3699,7 +3699,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                mev_accounts: vec![],
+                mev_accounts: None,
             }),
             nonce.clone(),
         );
@@ -3829,7 +3829,7 @@ mod tests {
                 program_indices: vec![],
                 rent: 0,
                 rent_debits: RentDebits::default(),
-                mev_accounts: vec![],
+                mev_accounts: None,
             }),
             nonce.clone(),
         );
