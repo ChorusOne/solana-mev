@@ -1173,14 +1173,16 @@ impl Accounts {
         }
 
         if let Some(mev_keys) = mev_keys {
-            // Can't lock token program for write.
-            if !account_locks.lock_readonly(&mev_keys.token_program) {
+            if !account_locks.is_locked_write(&mev_keys.token_program)
+                && !account_locks.lock_readonly(&mev_keys.token_program)
+            {
                 account_locks.insert_new_readonly(&mev_keys.token_program);
             }
 
-            // Can't lock token program for write.
             if let Some(user_authority) = mev_keys.user_authority {
-                if !account_locks.lock_readonly(&user_authority) {
+                if !account_locks.is_locked_write(&user_authority)
+                    && !account_locks.lock_readonly(&user_authority)
+                {
                     account_locks.insert_new_readonly(&user_authority);
                 }
             }
