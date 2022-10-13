@@ -84,47 +84,54 @@ pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Op
         .collect()
 }
 
-fn create_swap_tx(
-    program_id: &Pubkey,
-    swap_pubkey: &Pubkey,
-    authority_pubkey: &Pubkey,
-    user_transfer_authority: &Keypair,
-    source_pubkey: &Pubkey,
-    swap_source_pubkey: &Pubkey,
-    swap_destination_pubkey: &Pubkey,
-    destination_pubkey: &Pubkey,
-    pool_mint_pubkey: &Pubkey,
-    pool_fee_pubkey: &Pubkey,
-    token_program: &Pubkey,
-    instruction: Swap,
+struct SwapArguments<'a> {
+    program_id: Pubkey,
+    swap_pubkey: Pubkey,
+    authority_pubkey: Pubkey,
+    user_transfer_authority: &'a Keypair,
+    source_pubkey: Pubkey,
+    swap_source_pubkey: Pubkey,
+    swap_destination_pubkey: Pubkey,
+    destination_pubkey: Pubkey,
+    pool_mint_pubkey: Pubkey,
+    pool_fee_pubkey: Pubkey,
+    token_program: Pubkey,
+    amount_in: u64,
+    minimum_amount_out: u64,
     blockhash: Hash,
-) {
-    let data = SwapInstruction::Swap(instruction).pack();
+}
+
+fn create_swap_tx(swap_args: SwapArguments) {
+    let data = SwapInstruction::Swap(Swap {
+        amount_in: swap_args.amount_in,
+        minimum_amount_out: swap_args.minimum_amount_out,
+    })
+    .pack();
 
     let accounts = vec![
-        AccountMeta::new_readonly(*swap_pubkey, false),
-        AccountMeta::new_readonly(*authority_pubkey, false),
-        AccountMeta::new_readonly(user_transfer_authority.pubkey(), true),
-        AccountMeta::new(*source_pubkey, false),
-        AccountMeta::new(*swap_source_pubkey, false),
-        AccountMeta::new(*swap_destination_pubkey, false),
-        AccountMeta::new(*destination_pubkey, false),
-        AccountMeta::new(*pool_mint_pubkey, false),
-        AccountMeta::new(*pool_fee_pubkey, false),
-        AccountMeta::new_readonly(*token_program, false),
+        AccountMeta::new_readonly(swap_args.swap_pubkey, false),
+        AccountMeta::new_readonly(swap_args.authority_pubkey, false),
+        AccountMeta::new_readonly(swap_args.user_transfer_authority.pubkey(), true),
+        AccountMeta::new(swap_args.source_pubkey, false),
+        AccountMeta::new(swap_args.swap_source_pubkey, false),
+        AccountMeta::new(swap_args.swap_destination_pubkey, false),
+        AccountMeta::new(swap_args.destination_pubkey, false),
+        AccountMeta::new(swap_args.pool_mint_pubkey, false),
+        AccountMeta::new(swap_args.pool_fee_pubkey, false),
+        AccountMeta::new_readonly(swap_args.token_program, false),
     ];
 
     let swap_ix = Instruction {
-        program_id: *program_id,
+        program_id: swap_args.program_id,
         accounts,
         data,
     };
 
     let signed_tx = Transaction::new_signed_with_payer(
         &[swap_ix],
-        Some(&user_transfer_authority.pubkey()),
-        &[user_transfer_authority],
-        blockhash,
+        Some(&swap_args.user_transfer_authority.pubkey()),
+        &[swap_args.user_transfer_authority],
+        swap_args.blockhash,
     );
 
     let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(signed_tx).unwrap();
