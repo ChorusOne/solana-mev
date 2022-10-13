@@ -108,17 +108,18 @@ fn create_swap_tx(swap_args: SwapArguments) {
     })
     .pack();
 
+    let is_signer = false;
     let accounts = vec![
-        AccountMeta::new_readonly(swap_args.swap_pubkey, false),
-        AccountMeta::new_readonly(swap_args.authority_pubkey, false),
+        AccountMeta::new_readonly(swap_args.swap_pubkey, is_signer),
+        AccountMeta::new_readonly(swap_args.authority_pubkey, is_signer),
         AccountMeta::new_readonly(swap_args.user_transfer_authority.pubkey(), true),
-        AccountMeta::new(swap_args.source_pubkey, false),
-        AccountMeta::new(swap_args.swap_source_pubkey, false),
-        AccountMeta::new(swap_args.swap_destination_pubkey, false),
-        AccountMeta::new(swap_args.destination_pubkey, false),
-        AccountMeta::new(swap_args.pool_mint_pubkey, false),
-        AccountMeta::new(swap_args.pool_fee_pubkey, false),
-        AccountMeta::new_readonly(swap_args.token_program, false),
+        AccountMeta::new(swap_args.source_pubkey, is_signer),
+        AccountMeta::new(swap_args.swap_source_pubkey, is_signer),
+        AccountMeta::new(swap_args.swap_destination_pubkey, is_signer),
+        AccountMeta::new(swap_args.destination_pubkey, is_signer),
+        AccountMeta::new(swap_args.pool_mint_pubkey, is_signer),
+        AccountMeta::new(swap_args.pool_fee_pubkey, is_signer),
+        AccountMeta::new_readonly(swap_args.token_program, is_signer),
     ];
 
     let swap_ix = Instruction {
