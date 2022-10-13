@@ -370,6 +370,12 @@ fn test_log_serialization() {
                             "CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3",
                         )
                         .unwrap(),
+                        source: None,
+                        destination: None,
+                        pool_mint: Pubkey::from_str("33k9G5HeH5JFukXTVxx3EmZrqjhb19Ej2GC2kqVPCKnM")
+                            .unwrap(),
+                        pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
+                            .unwrap(),
                     },
                     pool_a_balance: 1,
                     pool_b_balance: 1,
@@ -401,7 +407,11 @@ fn test_log_serialization() {
             'pool':{\
               'address':'4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM',\
               'pool_a_account':'8opHzTAnfzRpPEx21XtnrVTX28YQuCpAjcn1PczScKh',\
-              'pool_b_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3'\
+              'pool_b_account':'CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3',\
+              'source':null,\
+              'destination':null,\
+              'pool_mint':'33k9G5HeH5JFukXTVxx3EmZrqjhb19Ej2GC2kqVPCKnM',\
+              'pool_fee':'GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr'\
             },\
             'pool_a_balance':1,\
             'pool_b_balance':1,\

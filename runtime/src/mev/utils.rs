@@ -91,12 +91,16 @@ mod tests {
         address = 'FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ'
         pool_a_account = 'EjUNm7Lzp6X8898JiCU28SbfQBfsYoWaViXUhCgizv82'
         pool_b_account = 'C1ZrV56rf1wbDzcnHY6FpNaVmzT5D8WtyEKS1FAGrboe'
+        pool_mint = '33k9G5HeH5JFukXTVxx3EmZrqjhb19Ej2GC2kqVPCKnM'
+        pool_fee = 'GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr'
 
     [[orca_account]]
         _id = 'SOL/USDC[aquafarm]'
         address = 'EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U'
         pool_a_account = 'ANP74VNsHwSrq9uUSjiSNyNWvf6ZPrKTmE4gHoNd13Lg'
         pool_b_account = '75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1'
+        pool_mint = 'APDFRM3HMr8CAGXwKHiu2f5ePSpaiEJhaURwhsRrUUt9'
+        pool_fee = '8JnSiuvQq3BVuCU3n4DrSTw9chBSPvEMswrhtifVkr1o'
     
     [[mev_path]]
         name = "USDT->USDC->SOL"
@@ -124,6 +128,12 @@ mod tests {
                         "C1ZrV56rf1wbDzcnHY6FpNaVmzT5D8WtyEKS1FAGrboe",
                     )
                     .unwrap(),
+                    source: None,
+                    destination: None,
+                    pool_mint: Pubkey::from_str("33k9G5HeH5JFukXTVxx3EmZrqjhb19Ej2GC2kqVPCKnM")
+                        .unwrap(),
+                    pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
+                        .unwrap(),
                 },
                 OrcaPoolAddresses {
                     address: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
@@ -136,6 +146,12 @@ mod tests {
                         "75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1",
                     )
                     .unwrap(),
+                    source: None,
+                    destination: None,
+                    pool_mint: Pubkey::from_str("APDFRM3HMr8CAGXwKHiu2f5ePSpaiEJhaURwhsRrUUt9")
+                        .unwrap(),
+                    pool_fee: Pubkey::from_str("8JnSiuvQq3BVuCU3n4DrSTw9chBSPvEMswrhtifVkr1o")
+                        .unwrap(),
                 },
             ]),
             mev_paths: vec![MevPath {
@@ -153,6 +169,7 @@ mod tests {
                     },
                 ],
             }],
+            user_authority_path: None,
         };
         assert_eq!(sample_config, expected_mev_config);
     }
