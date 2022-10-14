@@ -1197,6 +1197,14 @@ impl Accounts {
             account_locks.write_locks.insert(*k);
         }
 
+        if let Some(mev_keys) = mev_keys {
+            for k in &mev_keys.get_write_accounts() {
+                if !account_locks.is_locked_write(k) {
+                    account_locks.write_locks.insert(*k);
+                }
+            }
+        }
+
         for k in readonly_keys {
             if !account_locks.lock_readonly(k) {
                 account_locks.insert_new_readonly(k);
@@ -1204,7 +1212,7 @@ impl Accounts {
         }
 
         if let Some(mev_keys) = mev_keys {
-            for k in &mev_keys.get_acconts_to_lock_readonly() {
+            for k in &mev_keys.get_readonly_accounts() {
                 if !account_locks.is_locked_write(k) && !account_locks.lock_readonly(k) {
                     account_locks.insert_new_readonly(k);
                 }
@@ -1222,10 +1230,16 @@ impl Accounts {
         mev_keys: Option<&MevKeys>,
     ) {
         if let Some(mev_keys) = mev_keys {
-            for k in &mev_keys.get_acconts_to_lock_readonly() {
+            for k in &mev_keys.get_readonly_accounts() {
                 if !account_locks.is_locked_write(&k) {
                     account_locks.unlock_readonly(k);
                 }
+            }
+        }
+
+        if let Some(mev_keys) = mev_keys {
+            for k in &mev_keys.get_write_accounts() {
+                account_locks.unlock_write(k);
             }
         }
 
