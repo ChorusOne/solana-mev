@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn test_deserialization() {
-        let sample_config: MevConfig = toml::from_str(
+        let mut sample_config: MevConfig = toml::from_str(
             r#"
     log_path = '/tmp/mev.log'
     orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
@@ -122,6 +122,24 @@ mod tests {
     "#,
         )
         .expect("Failed to deserialize");
+        sample_config.populate_orca_pools_authority();
+
+        let (authority_usdc_usdt, _authority_bump_seed) = Pubkey::find_program_address(
+            &[
+                &Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ")
+                    .unwrap()
+                    .to_bytes()[..],
+            ],
+            &inline_spl_token::id(),
+        );
+        let (authority_sol_usdc, _authority_bump_seed) = Pubkey::find_program_address(
+            &[
+                &Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
+                    .unwrap()
+                    .to_bytes()[..],
+            ],
+            &inline_spl_token::id(),
+        );
 
         let expected_mev_config = MevConfig {
             log_path: PathBuf::from_str("/tmp/mev.log").unwrap(),
@@ -145,6 +163,7 @@ mod tests {
                         .unwrap(),
                     pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
                         .unwrap(),
+                    pool_authority: authority_usdc_usdt,
                 },
                 OrcaPoolAddresses {
                     address: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
@@ -163,6 +182,7 @@ mod tests {
                         .unwrap(),
                     pool_fee: Pubkey::from_str("8JnSiuvQq3BVuCU3n4DrSTw9chBSPvEMswrhtifVkr1o")
                         .unwrap(),
+                    pool_authority: authority_sol_usdc,
                 },
             ]),
             mev_paths: vec![MevPath {
