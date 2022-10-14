@@ -131,6 +131,7 @@ pub struct MevPoolAccounts {
     pub token_b: TransactionAccount,
     pub pool_mint: TransactionAccount,
     pub pool_fee: TransactionAccount,
+    pub pool_authority: TransactionAccount,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -169,24 +170,29 @@ impl MevAccounts {
                 .load_with_fixed_root(ancestors, &pool_keys.pool_fee, load_zero_lamports)
                 .unwrap_or_default();
 
+            let (pool_authority, _slot) = accounts_db
+                .load_with_fixed_root(ancestors, &pool_keys.pool_fee, load_zero_lamports)
+                .unwrap_or_default();
+
             pool_accounts.push(MevPoolAccounts {
                 pool: (pool_keys.pool, pool),
-                source: pool_keys.source.and_then(|src| {
+                source: pool_keys.source.map(|src| {
                     let (source, _slot) = accounts_db
                         .load_with_fixed_root(ancestors, &src, load_zero_lamports)
                         .unwrap_or_default();
-                    Some((src, source))
+                    (src, source)
                 }),
-                destination: pool_keys.destination.and_then(|dst| {
+                destination: pool_keys.destination.map(|dst| {
                     let (destination, _slot) = accounts_db
                         .load_with_fixed_root(ancestors, &dst, load_zero_lamports)
                         .unwrap_or_default();
-                    Some((dst, destination))
+                    (dst, destination)
                 }),
                 token_a: (pool_keys.token_a, token_a),
                 token_b: (pool_keys.token_b, token_b),
                 pool_mint: (pool_keys.pool_mint, pool_mint),
                 pool_fee: (pool_keys.pool_fee, pool_fee),
+                pool_authority: (pool_keys.pool, pool_authority),
             });
         }
         let (token_program, _slot) = accounts_db
@@ -196,11 +202,11 @@ impl MevAccounts {
         MevAccounts {
             pool_accounts,
             token_program: (mev_keys.token_program, token_program),
-            user_authority: mev_keys.user_authority.and_then(|user_authority| {
+            user_authority: mev_keys.user_authority.map(|user_authority| {
                 let (user_authority_account, _slot) = accounts_db
                     .load_with_fixed_root(ancestors, &user_authority, load_zero_lamports)
                     .unwrap_or_default();
-                Some((user_authority, user_authority_account))
+                (user_authority, user_authority_account)
             }),
         }
     }
@@ -460,7 +466,7 @@ impl Accounts {
 
             let mev_accounts = tx.mev_keys.as_ref().map(|mev_keys| {
                 MevAccounts::get_accounts_data(
-                    &mev_keys,
+                    mev_keys,
                     &self.accounts_db,
                     ancestors,
                     load_zero_lamports,
@@ -1200,7 +1206,7 @@ impl Accounts {
     ) {
         if let Some(mev_keys) = mev_keys {
             for k in &mev_keys.get_readonly_accounts() {
-                if !account_locks.is_locked_write(&k) {
+                if !account_locks.is_locked_write(k) {
                     account_locks.unlock_readonly(k);
                 }
             }

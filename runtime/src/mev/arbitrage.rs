@@ -84,7 +84,7 @@ impl MevPath {
 
 pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Vec<usize> {
     mev_paths
-        .into_iter()
+        .iter()
         .enumerate()
         .filter_map(|(i, path)| {
             path.does_arbitrage_opportunity_exist(pool_states)

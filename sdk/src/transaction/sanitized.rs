@@ -34,6 +34,7 @@ pub struct MevPoolKeys {
     pub token_b: Pubkey,
     pub pool_mint: Pubkey,
     pub pool_fee: Pubkey,
+    pub pool_authority: Pubkey,
 }
 
 #[derive(Debug, Clone)]
@@ -45,9 +46,10 @@ pub struct MevKeys {
 
 impl MevKeys {
     pub fn get_readonly_accounts(&self) -> Vec<Pubkey> {
-        let mut read_only_accounts = Vec::with_capacity(5 * self.pool_keys.len() + 2);
+        let mut read_only_accounts = Vec::with_capacity(6 * self.pool_keys.len() + 2);
         for pool_keys in &self.pool_keys {
             read_only_accounts.push(pool_keys.pool);
+            read_only_accounts.push(pool_keys.pool_authority);
             if pool_keys.source.is_some() && pool_keys.destination.is_some() {
                 continue;
             }
