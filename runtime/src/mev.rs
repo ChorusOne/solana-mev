@@ -378,6 +378,15 @@ impl MevLog {
 fn test_log_serialization() {
     use std::str::FromStr;
 
+    let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
+        &[
+            &Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM")
+                .unwrap()
+                .to_bytes()[..],
+        ],
+        &inline_spl_token::id(),
+    );
+
     let opportunity = PrePostPoolStates {
         transaction_hash: Hash::new(&[0; 32]),
         transaction_signature: Signature::new(&[0; 64]),
@@ -403,6 +412,7 @@ fn test_log_serialization() {
                             .unwrap(),
                         pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
                             .unwrap(),
+                        pool_authority: authority_pubkey,
                     },
                     pool_a_balance: 1,
                     pool_b_balance: 1,
