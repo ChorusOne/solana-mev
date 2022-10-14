@@ -26,12 +26,20 @@ pub struct MevConfig {
     pub user_authority_path: Option<PathBuf>,
 }
 
+impl MevConfig {
+    pub fn populate_orca_pools_authority(&mut self) {
+        for orca_acc in self.orca_accounts.0.iter_mut() {
+            orca_acc.populate_pool_authority();
+        }
+    }
+}
+
 /// Function to use when serializing a public key, to print it using base58.
 pub fn serialize_b58<S: Serializer, T: ToString>(x: &T, serializer: S) -> Result<S::Ok, S::Error> {
     serializer.serialize_str(&x.to_string())
 }
 
-/// Function to use when serializing a public key, to print it using base58.
+/// Function to use when serializing an optional public key, to print it using base58.
 pub fn serialize_opt_b58<S: Serializer, T: ToString>(
     x: &Option<T>,
     serializer: S,
@@ -51,7 +59,7 @@ where
     Pubkey::from_str(&buf).map_err(serde::de::Error::custom)
 }
 
-/// Function to use when deserializing a public key.
+/// Function to use when deserializing an optional public key.
 pub fn deserialize_opt_b58<'de, D>(deserializer: D) -> Result<Option<Pubkey>, D::Error>
 where
     D: Deserializer<'de>,
@@ -67,7 +75,10 @@ where
 
 pub fn get_mev_config_file(config_path: &PathBuf) -> MevConfig {
     let config_str = read_to_string(config_path).expect("Could not open config path.");
-    toml::from_str(&config_str).expect("Could not deserialize MEV config file.")
+    let mut config_file: MevConfig =
+        toml::from_str(&config_str).expect("Could not deserialize MEV config file.");
+    config_file.populate_orca_pools_authority();
+    config_file
 }
 
 #[cfg(test)]
