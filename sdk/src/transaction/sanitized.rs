@@ -44,20 +44,17 @@ pub struct MevKeys {
 }
 
 impl MevKeys {
-    pub fn get_acconts_to_lock_readonly(&self) -> Vec<Pubkey> {
-        let mut read_only_accounts = Vec::with_capacity(7 * self.pool_keys.len() + 2);
+    pub fn get_readonly_accounts(&self) -> Vec<Pubkey> {
+        let mut read_only_accounts = Vec::with_capacity(5 * self.pool_keys.len() + 2);
         for pool_keys in &self.pool_keys {
             read_only_accounts.push(pool_keys.pool);
+            if pool_keys.source.is_some() && pool_keys.destination.is_some() {
+                continue;
+            }
             read_only_accounts.push(pool_keys.token_a);
             read_only_accounts.push(pool_keys.token_b);
             read_only_accounts.push(pool_keys.pool_mint);
             read_only_accounts.push(pool_keys.pool_fee);
-            if let Some(source) = pool_keys.source {
-                read_only_accounts.push(source);
-            }
-            if let Some(destination) = pool_keys.destination {
-                read_only_accounts.push(destination);
-            }
         }
         if let Some(user_authority) = self.user_authority {
             read_only_accounts.push(user_authority);
@@ -66,8 +63,22 @@ impl MevKeys {
         read_only_accounts
     }
 
-    pub fn get_acconts_to_lock_write(&self) -> Vec<Pubkey> {
-        todo!()
+    pub fn get_write_accounts(&self) -> Vec<Pubkey> {
+        let mut write_accounts = Vec::with_capacity(6 * self.pool_keys.len());
+        for pool_keys in &self.pool_keys {
+            match (pool_keys.source, pool_keys.destination) {
+                (Some(source), Some(destination)) => {
+                    write_accounts.push(source);
+                    write_accounts.push(destination);
+                    write_accounts.push(pool_keys.token_a);
+                    write_accounts.push(pool_keys.token_b);
+                    write_accounts.push(pool_keys.pool_mint);
+                    write_accounts.push(pool_keys.pool_fee);
+                }
+                _ => continue,
+            }
+        }
+        write_accounts
     }
 }
 
