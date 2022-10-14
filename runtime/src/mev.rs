@@ -102,6 +102,19 @@ pub struct OrcaPoolAddresses {
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
     pub pool_fee: Pubkey,
+
+    /// Calculated by us from the pool's data.
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    pub pool_authority: Pubkey,
+}
+
+impl OrcaPoolAddresses {
+    pub fn populate_pool_authority(&mut self) {
+        let (pool_authority, _authority_bump_seed) =
+            Pubkey::find_program_address(&[&self.address.to_bytes()[..]], &inline_spl_token::id());
+        self.pool_authority = pool_authority;
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -220,6 +233,7 @@ impl Mev {
                     token_b: orca_pool.pool_b_account,
                     pool_mint: orca_pool.pool_mint,
                     pool_fee: orca_pool.pool_fee,
+                    pool_authority: orca_pool.pool_authority,
                 })
                 .collect();
             tx.mev_keys = Some(MevKeys {
@@ -255,13 +269,14 @@ impl Mev {
                             mev_account.pool.0.clone(),
                             OrcaPoolWithBalance {
                                 pool: OrcaPoolAddresses {
-                                    address: mev_account.pool.0.clone(),
-                                    pool_a_account: mev_account.token_a.0.clone(),
-                                    pool_b_account: mev_account.token_b.0.clone(),
+                                    address: mev_account.pool.0,
+                                    pool_a_account: mev_account.token_a.0,
+                                    pool_b_account: mev_account.token_b.0,
                                     source: None,
                                     destination: None,
-                                    pool_mint: mev_account.pool_mint.0.clone(),
-                                    pool_fee: mev_account.pool_fee.0.clone(),
+                                    pool_mint: mev_account.pool_mint.0,
+                                    pool_fee: mev_account.pool_fee.0,
+                                    pool_authority: mev_account.pool_authority.0,
                                 },
                                 pool_a_balance: pool_a_account.amount,
                                 pool_b_balance: pool_b_account.amount,
