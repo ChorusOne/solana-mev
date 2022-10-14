@@ -1,7 +1,13 @@
 pub mod arbitrage;
 pub mod utils;
 
-use std::{collections::HashMap, fs, io::Write, sync::Arc, thread::JoinHandle};
+use std::{
+    collections::HashMap,
+    fs::{self, File},
+    io::{BufReader, Write},
+    sync::Arc,
+    thread::JoinHandle,
+};
 
 use crossbeam_channel::{unbounded, Sender};
 use log::error;
@@ -188,7 +194,13 @@ impl Mev {
             orca_program: config.orca_program_id,
             orca_monitored_accounts: Arc::new(config.orca_accounts),
             mev_paths: config.mev_paths,
-            user_authority: Arc::new(None),
+            user_authority: Arc::new(config.user_authority_path.map(|path| {
+                let file = File::open(path).expect("[MEV] Could not open path");
+                let reader = BufReader::new(file);
+                let pk_bytes: Vec<u8> =
+                    serde_json::from_reader(reader).expect("[MEV] Could not read authority path");
+                Keypair::from_bytes(&pk_bytes).expect("[MEV] Could not generate Keypair from path")
+            })),
         }
     }
 
