@@ -210,9 +210,10 @@ impl Mev {
             user_authority: Arc::new(config.user_authority_path.map(|path| {
                 let file = File::open(path).expect("[MEV] Could not open path");
                 let reader = BufReader::new(file);
-                let pk_bytes: Vec<u8> =
+                let secret_key_bytes: Vec<u8> =
                     serde_json::from_reader(reader).expect("[MEV] Could not read authority path");
-                Keypair::from_bytes(&pk_bytes).expect("[MEV] Could not generate Keypair from path")
+                Keypair::from_bytes(&secret_key_bytes)
+                    .expect("[MEV] Could not generate Keypair from path")
             })),
         }
     }
