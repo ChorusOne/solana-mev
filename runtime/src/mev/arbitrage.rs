@@ -380,4 +380,133 @@ mod tests {
         let arbs = get_arbitrage_idxs(&vec![], &pool_states);
         assert_eq!(arbs, Vec::<usize>::new());
     }
+
+    #[test]
+    fn get_opportunity_exists_when_other_does_not() {
+        let pool_states = PoolStates(
+            vec![
+                (
+                    Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
+                    OrcaPoolWithBalance {
+                        pool: OrcaPoolAddresses {
+                            address: Pubkey::from_str(
+                                "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
+                            )
+                            .unwrap(),
+                            pool_a_account: Pubkey::new_unique(),
+                            pool_b_account: Pubkey::new_unique(),
+                            source: None,
+                            destination: None,
+                            pool_mint: Pubkey::new_unique(),
+                            pool_fee: Pubkey::new_unique(),
+                        },
+                        pool_a_balance: 4618233234,
+                        pool_b_balance: 6400518033,
+                        fees: Fees(spl_token_swap::curve::fees::Fees {
+                            trade_fee_numerator: 25,
+                            trade_fee_denominator: 10_000,
+                            owner_trade_fee_numerator: 5,
+                            owner_trade_fee_denominator: 10_000,
+                            owner_withdraw_fee_numerator: 0,
+                            owner_withdraw_fee_denominator: 1,
+                            host_fee_numerator: 0,
+                            host_fee_denominator: 1,
+                        }),
+                    },
+                ),
+                (
+                    Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap(),
+                    OrcaPoolWithBalance {
+                        pool: OrcaPoolAddresses {
+                            address: Pubkey::from_str(
+                                "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
+                            )
+                            .unwrap(),
+                            pool_a_account: Pubkey::new_unique(),
+                            pool_b_account: Pubkey::new_unique(),
+                            source: None,
+                            destination: None,
+                            pool_mint: Pubkey::new_unique(),
+                            pool_fee: Pubkey::new_unique(),
+                        },
+                        pool_a_balance: 54896627850684,
+                        pool_b_balance: 13408494240,
+                        fees: Fees(spl_token_swap::curve::fees::Fees {
+                            trade_fee_numerator: 25,
+                            trade_fee_denominator: 10_000,
+                            owner_trade_fee_numerator: 5,
+                            owner_trade_fee_denominator: 10_000,
+                            owner_withdraw_fee_numerator: 0,
+                            owner_withdraw_fee_denominator: 1,
+                            host_fee_numerator: 0,
+                            host_fee_denominator: 1,
+                        }),
+                    },
+                ),
+                (
+                    Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap(),
+                    OrcaPoolWithBalance {
+                        pool: OrcaPoolAddresses {
+                            address: Pubkey::from_str(
+                                "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
+                            )
+                            .unwrap(),
+                            pool_a_account: Pubkey::new_unique(),
+                            pool_b_account: Pubkey::new_unique(),
+                            source: None,
+                            destination: None,
+                            pool_mint: Pubkey::new_unique(),
+                            pool_fee: Pubkey::new_unique(),
+                        },
+                        pool_a_balance: 400881658679,
+                        pool_b_balance: 138436018345,
+                        fees: Fees(spl_token_swap::curve::fees::Fees {
+                            trade_fee_numerator: 25,
+                            trade_fee_denominator: 10_000,
+                            owner_trade_fee_numerator: 5,
+                            owner_trade_fee_denominator: 10_000,
+                            owner_withdraw_fee_numerator: 0,
+                            owner_withdraw_fee_denominator: 1,
+                            host_fee_numerator: 0,
+                            host_fee_denominator: 1,
+                        }),
+                    },
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let paths = vec![
+            MevPath {
+                name: "stETH->USDC->wstETH->stSOL->stSOL->USDC".to_owned(),
+                path: vec![
+                    PairInfo {
+                        pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                            .expect("wstETH/USDC"),
+                        direction: TradeDirection::BtoA,
+                    },
+                    PairInfo {
+                        pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
+                            .expect("stSOL/wstETH"),
+                        direction: TradeDirection::BtoA,
+                    },
+                    PairInfo {
+                        pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                            .expect("stSOL/USDC"),
+                        direction: TradeDirection::AtoB,
+                    },
+                ],
+            },
+            MevPath {
+                name: "stSOL->USDC".to_owned(),
+                path: vec![PairInfo {
+                    pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                        .expect("stSOL/USDC"),
+                    direction: TradeDirection::AtoB,
+                }],
+            },
+        ];
+        let arb_idxs = get_arbitrage_idxs(&paths, &pool_states);
+        assert_eq!(arb_idxs, vec![0]);
+    }
 }
