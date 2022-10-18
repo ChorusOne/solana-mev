@@ -281,7 +281,7 @@ impl Mev {
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)?
             .ok()?;
-        let mev_idxs_opt = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
+        let mev_idxs = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
 
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
@@ -292,7 +292,7 @@ impl Mev {
         })) {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
-        if let Some(mev_idxs) = mev_idxs_opt {
+        if mev_idxs.len() > 0 {
             if let Err(err) = self.log_send_channel.send(MevMsg::Opportunities(mev_idxs)) {
                 error!("[MEV] Could not log arbitrage, error: {}", err);
             }
