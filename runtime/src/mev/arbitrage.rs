@@ -70,14 +70,11 @@ impl MevPath {
     }
 }
 
-pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Option<Vec<usize>> {
-    if mev_paths.is_empty() {
-        return None;
-    }
+pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Vec<usize> {
     mev_paths
         .into_iter()
         .enumerate()
-        .map(|(i, path)| {
+        .filter_map(|(i, path)| {
             path.does_arbitrage_opportunity_exist(pool_states)
                 .and(Some(i))
         })
@@ -261,7 +258,7 @@ mod tests {
             ],
         };
         let arb_idxs = get_arbitrage_idxs(&[path.clone()], &pool_states);
-        assert_eq!(arb_idxs, Some(vec![0]));
+        assert_eq!(arb_idxs, vec![0]);
 
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
         assert_eq!(has_arbitrage, Some(()));
@@ -300,7 +297,7 @@ mod tests {
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
         assert_eq!(has_arbitrage, None);
         let arb_idxs = get_arbitrage_idxs(&[path], &pool_states);
-        assert_eq!(arb_idxs, None);
+        assert_eq!(arb_idxs, Vec::<usize>::new());
     }
 
     #[test]
@@ -381,6 +378,6 @@ mod tests {
             .collect(),
         );
         let arbs = get_arbitrage_idxs(&vec![], &pool_states);
-        assert_eq!(arbs, None);
+        assert_eq!(arbs, Vec::<usize>::new());
     }
 }
