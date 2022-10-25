@@ -52,10 +52,22 @@ impl MevPath {
                 ),
             };
             let fees = &tokens_state.fees.0;
-            let host_fee = fees.host_fee_numerator as f64 / fees.host_fee_denominator as f64;
-            let owner_fee =
-                fees.owner_trade_fee_numerator as f64 / fees.owner_trade_fee_denominator as f64;
-            let trade_fee = fees.trade_fee_numerator as f64 / fees.trade_fee_denominator as f64;
+            let host_fee = if fees.host_fee_numerator == 0 {
+                0_f64
+            } else {
+                fees.host_fee_numerator as f64 / fees.host_fee_denominator as f64
+            };
+            let owner_fee = if fees.owner_trade_fee_numerator == 0 {
+                0_f64
+            } else {
+                fees.owner_trade_fee_numerator as f64 / fees.owner_trade_fee_denominator as f64
+            };
+            let trade_fee = if fees.trade_fee_numerator == 0 {
+                0_f64
+            } else {
+                fees.trade_fee_numerator as f64 / fees.trade_fee_denominator as f64
+            };
+
             let total_fee = 1_f64 - (host_fee + owner_fee + trade_fee);
 
             marginal_prices_acc *= token_balance_to / token_balance_from;
