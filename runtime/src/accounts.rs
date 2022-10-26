@@ -132,7 +132,7 @@ pub struct MevPoolAccounts {
     pub pool_mint: TransactionAccount,
     pub pool_fee: TransactionAccount,
     // `pool_authority` is an authority derived from the `pool` and `token_id`.
-    // Newer versions of the Token Swap program does not require this field.
+    // Newer versions of the Token Swap program do not require this field.
     pub pool_authority: TransactionAccount,
 }
 
