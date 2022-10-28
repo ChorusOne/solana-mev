@@ -29,6 +29,7 @@ use spl_token_swap::state::SwapVersion;
 
 use crate::{
     accounts::LoadedTransaction,
+    accounts::MevAccountOrIdx::{Idx, ReadAccount, WriteAccount},
     inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
 };
@@ -260,24 +261,64 @@ impl Mev {
                     .pool_accounts
                     .iter()
                     .map(|mev_account| {
-                        let pool = SwapVersion::unpack(mev_account.pool.1.data())?;
+                        let pool_acc = match &mev_account.pool {
+                            Idx(idx) => &loaded_transaction.accounts[*idx],
+                            ReadAccount(acc) | WriteAccount(acc) => acc,
+                        };
+                        let pool = SwapVersion::unpack(pool_acc.1.data())?;
+
+                        let pool_a_acc = match &mev_account.token_a {
+                            Idx(idx) => &loaded_transaction.accounts[*idx],
+                            ReadAccount(acc) | WriteAccount(acc) => acc,
+                        };
                         let pool_a_account =
-                            spl_token::state::Account::unpack(mev_account.token_a.1.data())?;
+                            spl_token::state::Account::unpack(pool_a_acc.1.data())?;
+
+                        let pool_b_acc = match &mev_account.token_b {
+                            Idx(idx) => &loaded_transaction.accounts[*idx],
+                            ReadAccount(acc) | WriteAccount(acc) => acc,
+                        };
                         let pool_b_account =
-                            spl_token::state::Account::unpack(mev_account.token_b.1.data())?;
+                            spl_token::state::Account::unpack(pool_b_acc.1.data())?;
+
+                        let pool_source_pubkey = mev_account.source.as_ref().map(|src| match src {
+                            Idx(idx) => loaded_transaction.accounts[*idx].0,
+                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
+                        });
+
+                        let pool_destination_pubkey =
+                            mev_account.destination.as_ref().map(|dst| match dst {
+                                Idx(idx) => loaded_transaction.accounts[*idx].0,
+                                ReadAccount(acc) | WriteAccount(acc) => acc.0,
+                            });
+
+                        let pool_mint_pubkey = match &mev_account.pool_mint {
+                            Idx(idx) => loaded_transaction.accounts[*idx].0,
+                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
+                        };
+
+                        let pool_fee_pubkey = match &mev_account.pool_fee {
+                            Idx(idx) => loaded_transaction.accounts[*idx].0,
+                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
+                        };
+
+                        let pool_authority_pubkey = match &mev_account.pool_authority {
+                            Idx(idx) => loaded_transaction.accounts[*idx].0,
+                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
+                        };
 
                         Ok((
-                            mev_account.pool.0.clone(),
+                            pool_acc.0,
                             OrcaPoolWithBalance {
                                 pool: OrcaPoolAddresses {
-                                    address: mev_account.pool.0,
-                                    pool_a_account: mev_account.token_a.0,
-                                    pool_b_account: mev_account.token_b.0,
-                                    source: None,
-                                    destination: None,
-                                    pool_mint: mev_account.pool_mint.0,
-                                    pool_fee: mev_account.pool_fee.0,
-                                    pool_authority: mev_account.pool_authority.0,
+                                    address: pool_acc.0,
+                                    pool_a_account: pool_a_acc.0,
+                                    pool_b_account: pool_b_acc.0,
+                                    source: pool_source_pubkey,
+                                    destination: pool_destination_pubkey,
+                                    pool_mint: pool_mint_pubkey,
+                                    pool_fee: pool_fee_pubkey,
+                                    pool_authority: pool_authority_pubkey,
                                 },
                                 pool_a_balance: pool_a_account.amount,
                                 pool_b_balance: pool_b_account.amount,
@@ -320,7 +361,7 @@ impl Mev {
         })) {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
-        if mev_idxs.len() > 0 {
+        if !mev_idxs.is_empty() {
             if let Err(err) = self.log_send_channel.send(MevMsg::Opportunities(mev_idxs)) {
                 error!("[MEV] Could not log arbitrage, error: {}", err);
             }
