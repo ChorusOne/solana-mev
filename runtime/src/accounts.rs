@@ -122,7 +122,7 @@ pub struct Accounts {
     pub(crate) account_locks: Mutex<AccountLocks>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum MevAccountOrIdx {
     /// Index to look at inside the `LoadedTransaction` when the account is
     /// writable.
@@ -131,7 +131,7 @@ pub enum MevAccountOrIdx {
     WriteAccount(TransactionAccount),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MevPoolAccounts {
     pub pool: MevAccountOrIdx,
     pub source: Option<MevAccountOrIdx>,
@@ -143,7 +143,7 @@ pub struct MevPoolAccounts {
     pub pool_authority: MevAccountOrIdx,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MevAccounts {
     pub pool_accounts: Vec<MevPoolAccounts>,
     pub token_program: MevAccountOrIdx,
