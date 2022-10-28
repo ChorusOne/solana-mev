@@ -35,7 +35,7 @@ use crate::{
 };
 
 use self::{
-    arbitrage::{get_arbitrage_idxs, MevPath, MevPathWithInput},
+    arbitrage::{get_arbitrage_idxs, MevOpportunityWithInput, MevPath},
     utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
 
@@ -377,10 +377,10 @@ impl MevLog {
                 .expect("[MEV] Could not write log to file"),
 
                 Ok(MevMsg::Opportunities(mev_idx_input)) => {
-                    let mev_paths_input: Vec<MevPathWithInput> = mev_idx_input
+                    let mev_paths_input: Vec<MevOpportunityWithInput> = mev_idx_input
                         .into_iter()
-                        .map(|(i, input)| MevPathWithInput {
-                            path: &mev_paths[i],
+                        .map(|(i, input)| MevOpportunityWithInput {
+                            opportunity: &mev_paths[i],
                             input,
                         })
                         .collect();

@@ -228,21 +228,24 @@ assert mev_logs[len(mev_logs) - 1] == {
     'event': 'opportunity',
     'data': [
         {
-            'name': 'P0->P1->P2',
-            'path': [
-                {
-                    'pool': token_pool_p0.token_swap_account,
-                    'direction': 'BtoA',
-                },
-                {
-                    'pool': token_pool_p1.token_swap_account,
-                    'direction': 'BtoA',
-                },
-                {
-                    'pool': token_pool_p2.token_swap_account,
-                    'direction': 'AtoB',
-                },
-            ],
+            'opportunity': {
+                'name': 'P0->P1->P2',
+                'path': [
+                    {
+                        'pool': token_pool_p0.token_swap_account,
+                        'direction': 'BtoA',
+                    },
+                    {
+                        'pool': token_pool_p1.token_swap_account,
+                        'direction': 'BtoA',
+                    },
+                    {
+                        'pool': token_pool_p2.token_swap_account,
+                        'direction': 'AtoB',
+                    },
+                ],
+            },
+            'input': 1038789.8258295291,
         }
     ],
 }
