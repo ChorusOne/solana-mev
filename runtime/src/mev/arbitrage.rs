@@ -36,8 +36,8 @@ pub struct MevPath {
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
-pub struct MevPathWithInput<'a> {
-    pub path: &'a MevPath,
+pub struct MevOpportunityWithInput<'a> {
+    pub opportunity: &'a MevPath,
     pub input: f64,
 }
 
@@ -285,10 +285,10 @@ mod tests {
             ],
         };
         let arb_idxs = get_arbitrage_idxs(&[path.clone()], &pool_states);
-        assert_eq!(arb_idxs, vec![0]);
+        assert_eq!(arb_idxs, vec![(0, 1036845732.6985222)]);
 
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
-        assert_eq!(has_arbitrage, Some(()));
+        assert_eq!(has_arbitrage, Some(1036845732.6985222));
 
         pool_states
             .0
@@ -324,7 +324,7 @@ mod tests {
         let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
         assert_eq!(has_arbitrage, None);
         let arb_idxs = get_arbitrage_idxs(&[path], &pool_states);
-        assert_eq!(arb_idxs, Vec::<usize>::new());
+        assert_eq!(arb_idxs, vec![]);
     }
 
     #[test]
@@ -406,7 +406,7 @@ mod tests {
             .collect(),
         );
         let arbs = get_arbitrage_idxs(&vec![], &pool_states);
-        assert_eq!(arbs, Vec::<usize>::new());
+        assert_eq!(arbs, vec![]);
     }
 
     #[test]
@@ -538,6 +538,6 @@ mod tests {
             },
         ];
         let arb_idxs = get_arbitrage_idxs(&paths, &pool_states);
-        assert_eq!(arb_idxs, vec![0]);
+        assert_eq!(arb_idxs, vec![(0, 1036845732.6985222)]);
     }
 }
