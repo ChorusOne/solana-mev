@@ -35,7 +35,7 @@ use crate::{
 };
 
 use self::{
-    arbitrage::{get_arbitrage_idxs, MevPath},
+    arbitrage::{get_arbitrage_idxs, MevPath, MevPathWithInput},
     utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
 
@@ -178,7 +178,7 @@ impl Serialize for PoolStates {
 
 pub enum MevMsg {
     Log(PrePostPoolStates),
-    Opportunities(Vec<usize>),
+    Opportunities(Vec<(usize, f64)>),
     Exit,
 }
 
@@ -331,7 +331,7 @@ impl Mev {
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)?
             .ok()?;
-        let mev_idxs = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
+        let mev_idx_input = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
 
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
@@ -342,8 +342,11 @@ impl Mev {
         })) {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
-        if !mev_idxs.is_empty() {
-            if let Err(err) = self.log_send_channel.send(MevMsg::Opportunities(mev_idxs)) {
+        if !mev_idx_input.is_empty() {
+            if let Err(err) = self
+                .log_send_channel
+                .send(MevMsg::Opportunities(mev_idx_input))
+            {
                 error!("[MEV] Could not log arbitrage, error: {}", err);
             }
         }
@@ -373,13 +376,18 @@ impl MevLog {
                 )
                 .expect("[MEV] Could not write log to file"),
 
-                Ok(MevMsg::Opportunities(mev_idxs)) => {
-                    let mev_paths: Vec<&MevPath> =
-                        mev_idxs.into_iter().map(|i| &mev_paths[i]).collect();
+                Ok(MevMsg::Opportunities(mev_idx_input)) => {
+                    let mev_paths_input: Vec<MevPathWithInput> = mev_idx_input
+                        .into_iter()
+                        .map(|(i, input)| MevPathWithInput {
+                            path: &mev_paths[i],
+                            input,
+                        })
+                        .collect();
                     writeln!(
                         file,
                         "{{\"event\":\"opportunity\",\"data\":{}}}",
-                        serde_json::to_string(&mev_paths)
+                        serde_json::to_string(&mev_paths_input)
                             .expect("Constructed by us, should never fail")
                     )
                     .expect("[MEV] Could not write log opportunity to file")

@@ -35,9 +35,17 @@ pub struct MevPath {
     pub path: Vec<PairInfo>,
 }
 
+#[derive(Debug, PartialEq, Clone, Serialize)]
+pub struct MevPathWithInput<'a> {
+    pub path: &'a MevPath,
+    pub input: f64,
+}
+
 impl MevPath {
-    fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<()> {
+    fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<f64> {
         let mut marginal_prices_acc = 1_f64;
+        let mut optimal_input_denominator = 0_f64;
+        let mut previous_ratio = 1_f64;
         for pair_info in &self.path {
             let tokens_state = pool_states.0.get(&pair_info.pool)?;
 
@@ -72,23 +80,27 @@ impl MevPath {
 
             marginal_prices_acc *= token_balance_to / token_balance_from;
             marginal_prices_acc *= total_fee;
-        }
 
+            optimal_input_denominator += total_fee * previous_ratio / token_balance_to;
+            previous_ratio = token_balance_to / token_balance_from;
+        }
         if marginal_prices_acc > 1_f64 {
-            Some(())
+            let optimal_input_numerator = marginal_prices_acc.sqrt() - 1_f64;
+            let optimal_input = optimal_input_numerator / optimal_input_denominator;
+            Some(optimal_input)
         } else {
             None
         }
     }
 }
 
-pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Vec<usize> {
+pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Vec<(usize, f64)> {
     mev_paths
         .iter()
         .enumerate()
         .filter_map(|(i, path)| {
             path.does_arbitrage_opportunity_exist(pool_states)
-                .and(Some(i))
+                .map(|input| (i, input))
         })
         .collect()
 }
