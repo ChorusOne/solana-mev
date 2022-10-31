@@ -173,7 +173,7 @@ impl MevAccounts {
                 .unwrap_or_default();
 
             let (pool_authority, _slot) = accounts_db
-                .load_with_fixed_root(ancestors, &pool_keys.pool_fee, load_zero_lamports)
+                .load_with_fixed_root(ancestors, &pool_keys.pool_authority, load_zero_lamports)
                 .unwrap_or_default();
 
             pool_accounts.push(MevPoolAccounts {
