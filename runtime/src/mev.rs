@@ -29,7 +29,7 @@ use spl_token_swap::state::SwapVersion;
 
 use crate::{
     accounts::LoadedTransaction,
-    accounts::MevAccountOrIdx::{Idx, ReadAccount, WriteAccount},
+    accounts::MevAccountOrIdx::{self, Idx, ReadAccount, WriteAccount},
     inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
 };
@@ -249,9 +249,9 @@ impl Mev {
 
     /// Attempts to deserialize the Orca accounts MEV is interested in,
     /// in case the deserialization fails for some reason, returns the error.
-    pub fn get_all_orca_monitored_accounts(
+    pub fn get_all_orca_monitored_accounts<'a>(
         &self,
-        loaded_transaction: &LoadedTransaction,
+        loaded_transaction: &'a LoadedTransaction,
     ) -> Option<Result<PoolStates, ProgramError>> {
         let pool_states = loaded_transaction
             .mev_accounts
@@ -261,51 +261,32 @@ impl Mev {
                     .pool_accounts
                     .iter()
                     .map(|mev_account| {
-                        let pool_acc = match &mev_account.pool {
+                        let get_account = |account_ref: &'a MevAccountOrIdx| match account_ref {
                             Idx(idx) => &loaded_transaction.accounts[*idx],
                             ReadAccount(acc) | WriteAccount(acc) => acc,
                         };
+                        let pool_acc = get_account(&mev_account.pool);
                         let pool = SwapVersion::unpack(pool_acc.1.data())?;
 
-                        let pool_a_acc = match &mev_account.token_a {
-                            Idx(idx) => &loaded_transaction.accounts[*idx],
-                            ReadAccount(acc) | WriteAccount(acc) => acc,
-                        };
+                        let pool_a_acc = get_account(&mev_account.token_a);
                         let pool_a_account =
                             spl_token::state::Account::unpack(pool_a_acc.1.data())?;
 
-                        let pool_b_acc = match &mev_account.token_b {
-                            Idx(idx) => &loaded_transaction.accounts[*idx],
-                            ReadAccount(acc) | WriteAccount(acc) => acc,
-                        };
+                        let pool_b_acc = get_account(&mev_account.token_b);
                         let pool_b_account =
                             spl_token::state::Account::unpack(pool_b_acc.1.data())?;
 
-                        let pool_source_pubkey = mev_account.source.as_ref().map(|src| match src {
-                            Idx(idx) => loaded_transaction.accounts[*idx].0,
-                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
-                        });
+                        let pool_source_pubkey =
+                            mev_account.source.as_ref().map(|src| get_account(src).0);
 
-                        let pool_destination_pubkey =
-                            mev_account.destination.as_ref().map(|dst| match dst {
-                                Idx(idx) => loaded_transaction.accounts[*idx].0,
-                                ReadAccount(acc) | WriteAccount(acc) => acc.0,
-                            });
+                        let pool_destination_pubkey = mev_account
+                            .destination
+                            .as_ref()
+                            .map(|dst| get_account(dst).0);
 
-                        let pool_mint_pubkey = match &mev_account.pool_mint {
-                            Idx(idx) => loaded_transaction.accounts[*idx].0,
-                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
-                        };
-
-                        let pool_fee_pubkey = match &mev_account.pool_fee {
-                            Idx(idx) => loaded_transaction.accounts[*idx].0,
-                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
-                        };
-
-                        let pool_authority_pubkey = match &mev_account.pool_authority {
-                            Idx(idx) => loaded_transaction.accounts[*idx].0,
-                            ReadAccount(acc) | WriteAccount(acc) => acc.0,
-                        };
+                        let pool_mint_pubkey = get_account(&mev_account.pool_mint).0;
+                        let pool_fee_pubkey = get_account(&mev_account.pool_fee).0;
+                        let pool_authority_pubkey = get_account(&mev_account.pool_authority).0;
 
                         Ok((
                             pool_acc.0,
