@@ -178,26 +178,13 @@ impl MevAccounts {
         for pool_keys in &mev_keys.pool_keys {
             let is_writable = pool_keys.source.is_some() && pool_keys.destination.is_some();
 
-            let pool = MevAccountOrIdx::ReadAccount((
-                pool_keys.pool,
-                accounts_db
-                    .load_with_fixed_root(ancestors, &pool_keys.pool, load_zero_lamports)
-                    .unwrap_or_default()
-                    .0,
-            ));
-
+            let pool = get_account_or_idx(&pool_keys.pool, false);
             let token_a = get_account_or_idx(&pool_keys.token_a, is_writable);
             let token_b = get_account_or_idx(&pool_keys.token_b, is_writable);
             let pool_mint = get_account_or_idx(&pool_keys.pool_mint, is_writable);
             let pool_fee = get_account_or_idx(&pool_keys.pool_fee, is_writable);
 
-            let pool_authority = MevAccountOrIdx::ReadAccount((
-                pool_keys.pool_authority,
-                accounts_db
-                    .load_with_fixed_root(ancestors, &pool_keys.pool_authority, load_zero_lamports)
-                    .unwrap_or_default()
-                    .0,
-            ));
+            let pool_authority = get_account_or_idx(&pool_keys.pool_authority, false);
 
             pool_accounts.push(MevPoolAccounts {
                 pool,
@@ -214,26 +201,14 @@ impl MevAccounts {
                 pool_authority,
             });
         }
-        let token_program = MevAccountOrIdx::ReadAccount((
-            mev_keys.token_program,
-            accounts_db
-                .load_with_fixed_root(ancestors, &mev_keys.token_program, load_zero_lamports)
-                .unwrap_or_default()
-                .0,
-        ));
+        let token_program = get_account_or_idx(&mev_keys.token_program, false);
 
         MevAccounts {
             pool_accounts,
             token_program,
-            user_authority: mev_keys.user_authority.map(|user_authority| {
-                MevAccountOrIdx::ReadAccount((
-                    user_authority,
-                    accounts_db
-                        .load_with_fixed_root(ancestors, &user_authority, load_zero_lamports)
-                        .unwrap_or_default()
-                        .0,
-                ))
-            }),
+            user_authority: mev_keys
+                .user_authority
+                .map(|user_authority| get_account_or_idx(&user_authority, false)),
         }
     }
 }
