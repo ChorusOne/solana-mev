@@ -1157,42 +1157,51 @@ impl Accounts {
         readonly_keys: Vec<&Pubkey>,
         mev_keys: Option<&MevKeys>,
     ) -> Result<()> {
-        for k in writable_keys.iter() {
+        let (all_read_only_keys, all_writable_keys) = if let Some(mev_keys) = mev_keys {
+            let mev_readonly_keys = mev_keys.get_readonly_accounts();
+            let mut readable_set: HashSet<&Pubkey> =
+                HashSet::with_capacity(readonly_keys.len() + mev_readonly_keys.len());
+            readable_set.extend(readonly_keys.into_iter());
+            readable_set.extend(mev_readonly_keys.into_iter());
+            // Remove all writable keys from readonly accounts.
+            for k in &writable_keys {
+                readable_set.remove(k);
+            }
+
+            let mev_writable_keys = mev_keys.get_write_accounts();
+            let mut writable_set: HashSet<&Pubkey> =
+                HashSet::with_capacity(writable_keys.len() + mev_writable_keys.len());
+            writable_set.extend(writable_keys.into_iter());
+            writable_set.extend(mev_writable_keys.into_iter());
+
+            let all_readable_accounts: Vec<&Pubkey> = readable_set.into_iter().collect();
+            let all_writable_accounts: Vec<&Pubkey> = writable_set.into_iter().collect();
+
+            (all_readable_accounts, all_writable_accounts)
+        } else {
+            (readonly_keys, writable_keys)
+        };
+
+        for k in all_writable_keys.iter() {
             if account_locks.is_locked_write(k) || account_locks.is_locked_readonly(k) {
                 debug!("Writable account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
-        for k in readonly_keys.iter() {
+        for k in all_read_only_keys.iter() {
             if account_locks.is_locked_write(k) {
                 debug!("Read-only account in use: {:?}", k);
                 return Err(TransactionError::AccountInUse);
             }
         }
 
-        for k in writable_keys {
+        for k in all_writable_keys {
             account_locks.write_locks.insert(*k);
         }
 
-        if let Some(mev_keys) = mev_keys {
-            for k in &mev_keys.get_write_accounts() {
-                if !account_locks.is_locked_write(k) {
-                    account_locks.write_locks.insert(*k);
-                }
-            }
-        }
-
-        for k in readonly_keys {
+        for k in all_read_only_keys {
             if !account_locks.lock_readonly(k) {
                 account_locks.insert_new_readonly(k);
-            }
-        }
-
-        if let Some(mev_keys) = mev_keys {
-            for k in &mev_keys.get_readonly_accounts() {
-                if !account_locks.is_locked_write(k) && !account_locks.lock_readonly(k) {
-                    account_locks.insert_new_readonly(k);
-                }
             }
         }
 
@@ -1212,9 +1221,6 @@ impl Accounts {
                     account_locks.unlock_readonly(k);
                 }
             }
-        }
-
-        if let Some(mev_keys) = mev_keys {
             for k in &mev_keys.get_write_accounts() {
                 account_locks.unlock_write(k);
             }
