@@ -25,11 +25,14 @@ use solana_sdk::{
     transaction::{MevKeys, MevPoolKeys, SanitizedTransaction},
 };
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
-use spl_token_swap::state::SwapVersion;
+use spl_token_swap::{curve::calculator::CurveCalculator, state::SwapVersion};
 
 use crate::{
     accounts::LoadedTransaction,
-    accounts::MevAccountOrIdx::{self, Idx, ReadAccount, WriteAccount},
+    accounts::{
+        Accounts,
+        MevAccountOrIdx::{self, Idx, ReadAccount, WriteAccount},
+    },
     inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
 };
@@ -124,6 +127,9 @@ pub struct OrcaPoolWithBalance {
     pool_a_balance: u64,
     pool_b_balance: u64,
     fees: Fees,
+
+    #[serde(skip_serializing)]
+    curve_calculator: Arc<dyn CurveCalculator + Sync + Send>,
 }
 
 #[derive(Debug)]
@@ -304,6 +310,7 @@ impl Mev {
                                 pool_a_balance: pool_a_account.amount,
                                 pool_b_balance: pool_b_account.amount,
                                 fees: Fees(pool.fees().clone()),
+                                curve_calculator: pool.swap_curve().calculator.clone(),
                             },
                         ))
                     })
@@ -327,6 +334,7 @@ impl Mev {
         loaded_transaction: &mut LoadedTransaction,
         slot: Slot,
         pre_tx_pool_state: PoolStates,
+        accounts: &Arc<Accounts>,
     ) -> Option<()> {
         let post_tx_pool_state = self
             .get_all_orca_monitored_accounts(loaded_transaction)?
@@ -407,8 +415,10 @@ impl MevLog {
 
 #[test]
 fn test_log_serialization() {
+    use spl_token_swap::curve::constant_product::ConstantProductCurve;
     use std::str::FromStr;
 
+    let curve_calculator = Arc::new(ConstantProductCurve::default());
     let (authority_pubkey, _authority_bump_seed) = Pubkey::find_program_address(
         &[
             &Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM")
@@ -457,6 +467,7 @@ fn test_log_serialization() {
                         host_fee_numerator: 1,
                         host_fee_denominator: 10,
                     }),
+                    curve_calculator,
                 },
             )]
             .into_iter()

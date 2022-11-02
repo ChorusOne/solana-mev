@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use serde::Serialize;
 use solana_sdk::{
     hash::Hash,
@@ -7,7 +9,12 @@ use solana_sdk::{
     signer::Signer,
     transaction::{SanitizedTransaction, Transaction},
 };
-use spl_token_swap::instruction::{Swap, SwapInstruction};
+use spl_token_swap::{
+    curve::calculator::SwapWithoutFeesResult,
+    instruction::{Swap, SwapInstruction},
+};
+
+use crate::{accounts::Accounts, inline_spl_token};
 
 use super::{
     utils::{deserialize_b58, serialize_b58},
@@ -42,6 +49,63 @@ pub struct MevOpportunityWithInput<'a> {
 }
 
 impl MevPath {
+    fn get_mev_txs(
+        &self,
+        program_id: Pubkey,
+        pool_states: &PoolStates,
+        user_transfer_authority: Option<&Keypair>,
+        blockhash: Hash,
+        accounts: &Arc<Accounts>,
+    ) -> Option<Vec<SanitizedTransaction>> {
+        let mut amount_in = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
+        let mut sanitized_txs = Vec::with_capacity(self.path.len());
+
+        for pair_info in &self.path {
+            let pool_state = pool_states.0.get(&pair_info.pool)?;
+            let swap_arguments = SwapArguments {
+                program_id,
+                swap_pubkey: pair_info.pool,
+                authority_pubkey: pool_state.pool.pool_authority,
+                user_transfer_authority: user_transfer_authority?,
+                source_pubkey: pool_state.pool.source?,
+                swap_source_pubkey: pool_state.pool.pool_a_account,
+                swap_destination_pubkey: pool_state.pool.pool_b_account,
+                destination_pubkey: pool_state.pool.destination?,
+                pool_mint_pubkey: pool_state.pool.pool_mint,
+                pool_fee_pubkey: pool_state.pool.pool_fee,
+                token_program: inline_spl_token::id(),
+                amount_in: amount_in as u64,
+                minimum_amount_out: 0,
+                blockhash,
+            };
+
+            let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
+            let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
+
+            let total_fees = trade_fee.checked_add(owner_fee)?;
+            let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
+
+            let trade_direction = if pair_info.direction == TradeDirection::AtoB {
+                spl_token_swap::curve::calculator::TradeDirection::AtoB
+            } else {
+                spl_token_swap::curve::calculator::TradeDirection::BtoA
+            };
+            let SwapWithoutFeesResult {
+                source_amount_swapped,
+                destination_amount_swapped,
+            } = pool_state.curve_calculator.swap_without_fees(
+                amount_in as u128,
+                pool_state.pool_a_balance as u128,
+                pool_state.pool_b_balance as u128,
+                trade_direction,
+            )?;
+            let source_amount_swapped = source_amount_swapped.checked_add(total_fees)?;
+
+            sanitized_txs.push(create_swap_tx(swap_arguments));
+        }
+        Some(sanitized_txs)
+    }
+
     fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<f64> {
         let mut marginal_prices_acc = 1_f64;
         let mut optimal_input_denominator = 0_f64;
@@ -122,7 +186,7 @@ struct SwapArguments<'a> {
     blockhash: Hash,
 }
 
-fn create_swap_tx(swap_args: SwapArguments) {
+fn create_swap_tx(swap_args: SwapArguments) -> SanitizedTransaction {
     let data = SwapInstruction::Swap(Swap {
         amount_in: swap_args.amount_in,
         minimum_amount_out: swap_args.minimum_amount_out,
@@ -156,18 +220,22 @@ fn create_swap_tx(swap_args: SwapArguments) {
         swap_args.blockhash,
     );
 
-    let sanitized_tx = SanitizedTransaction::try_from_legacy_transaction(signed_tx).unwrap();
+    SanitizedTransaction::try_from_legacy_transaction(signed_tx)
+        .expect("Built by us, shouldn't fail.")
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
+    use spl_token_swap::curve::constant_product::ConstantProductCurve;
+
     use super::*;
     use crate::mev::{Fees, OrcaPoolAddresses, OrcaPoolWithBalance, PoolStates};
 
     #[test]
     fn test_get_arbitrage() {
+        let curve_calculator = Arc::new(ConstantProductCurve::default());
         let mut pool_states = PoolStates(
             vec![
                 (
@@ -198,6 +266,7 @@ mod tests {
                             host_fee_numerator: 0,
                             host_fee_denominator: 1,
                         }),
+                        curve_calculator: curve_calculator.clone(),
                     },
                 ),
                 (
@@ -228,6 +297,7 @@ mod tests {
                             host_fee_numerator: 0,
                             host_fee_denominator: 1,
                         }),
+                        curve_calculator: curve_calculator.clone(),
                     },
                 ),
                 (
@@ -258,6 +328,7 @@ mod tests {
                             host_fee_numerator: 0,
                             host_fee_denominator: 1,
                         }),
+                        curve_calculator,
                     },
                 ),
             ]
@@ -329,6 +400,7 @@ mod tests {
 
     #[test]
     fn test_serialize() {
+        let curve_calculator = Arc::new(ConstantProductCurve::default());
         let path = MevPath {
             name: "SOL->USDC->wstETH->stSOL->stSOL->USDC->SOL".to_owned(),
             path: vec![
@@ -373,6 +445,7 @@ mod tests {
 
     #[test]
     fn get_opportunity_with_empty_paths() {
+        let curve_calculator = Arc::new(ConstantProductCurve::default());
         let pool_states = PoolStates(
             vec![(
                 Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
@@ -400,6 +473,7 @@ mod tests {
                         host_fee_numerator: 0,
                         host_fee_denominator: 1,
                     }),
+                    curve_calculator,
                 },
             )]
             .into_iter()
@@ -411,6 +485,7 @@ mod tests {
 
     #[test]
     fn get_opportunity_exists_when_other_does_not() {
+        let curve_calculator = Arc::new(ConstantProductCurve::default());
         let pool_states = PoolStates(
             vec![
                 (
@@ -441,6 +516,7 @@ mod tests {
                             host_fee_numerator: 0,
                             host_fee_denominator: 1,
                         }),
+                        curve_calculator: curve_calculator.clone(),
                     },
                 ),
                 (
@@ -471,6 +547,7 @@ mod tests {
                             host_fee_numerator: 0,
                             host_fee_denominator: 1,
                         }),
+                        curve_calculator: curve_calculator.clone(),
                     },
                 ),
                 (
@@ -501,6 +578,7 @@ mod tests {
                             host_fee_numerator: 0,
                             host_fee_denominator: 1,
                         }),
+                        curve_calculator,
                     },
                 ),
             ]
