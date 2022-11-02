@@ -57,11 +57,36 @@ impl MevPath {
         blockhash: Hash,
         accounts: &Arc<Accounts>,
     ) -> Option<Vec<SanitizedTransaction>> {
-        let mut amount_in = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
+        let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
+        let mut amount_in = initial_amount;
         let mut sanitized_txs = Vec::with_capacity(self.path.len());
 
         for pair_info in &self.path {
             let pool_state = pool_states.0.get(&pair_info.pool)?;
+
+            let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
+            let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
+
+            let total_fees = trade_fee.checked_add(owner_fee)?;
+
+            let trade_direction = if pair_info.direction == TradeDirection::AtoB {
+                spl_token_swap::curve::calculator::TradeDirection::AtoB
+            } else {
+                spl_token_swap::curve::calculator::TradeDirection::BtoA
+            };
+
+            let SwapWithoutFeesResult {
+                source_amount_swapped,
+                destination_amount_swapped,
+            } = pool_state.curve_calculator.swap_without_fees(
+                amount_in as u128,
+                pool_state.pool_a_balance as u128,
+                pool_state.pool_b_balance as u128,
+                trade_direction,
+            )?;
+
+            let source_amount_swapped = source_amount_swapped.checked_add(total_fees)?;
+
             let swap_arguments = SwapArguments {
                 program_id,
                 swap_pubkey: pair_info.pool,
@@ -78,32 +103,16 @@ impl MevPath {
                 minimum_amount_out: 0,
                 blockhash,
             };
-
-            let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
-            let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
-
-            let total_fees = trade_fee.checked_add(owner_fee)?;
-            let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
-
-            let trade_direction = if pair_info.direction == TradeDirection::AtoB {
-                spl_token_swap::curve::calculator::TradeDirection::AtoB
-            } else {
-                spl_token_swap::curve::calculator::TradeDirection::BtoA
-            };
-            let SwapWithoutFeesResult {
-                source_amount_swapped,
-                destination_amount_swapped,
-            } = pool_state.curve_calculator.swap_without_fees(
-                amount_in as u128,
-                pool_state.pool_a_balance as u128,
-                pool_state.pool_b_balance as u128,
-                trade_direction,
-            )?;
-            let source_amount_swapped = source_amount_swapped.checked_add(total_fees)?;
-
             sanitized_txs.push(create_swap_tx(swap_arguments));
+            amount_in = destination_amount_swapped;
         }
-        Some(sanitized_txs)
+        if amount_in <= initial_amount {
+            // If the the `amount_in` is less than the initial amount, return
+            // `None`.
+            None
+        } else {
+            Some(sanitized_txs)
+        }
     }
 
     fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<f64> {
