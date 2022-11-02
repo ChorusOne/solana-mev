@@ -4226,6 +4226,7 @@ impl Bank {
                             loaded_transaction,
                             self.slot,
                             pre_pool_state,
+                            &self.rc.accounts,
                         );
                         // TODO: Execute opportunities.
                         // execution_results.push(self.execute_loaded_transaction(
