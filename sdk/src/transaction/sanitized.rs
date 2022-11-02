@@ -1,6 +1,8 @@
 #![cfg(feature = "full")]
 
 pub use crate::message::{AddressLoader, SimpleAddressLoader};
+use std::collections::HashSet;
+
 use {
     super::SanitizedVersionedTransaction,
     crate::{
@@ -45,42 +47,38 @@ pub struct MevKeys {
 }
 
 impl MevKeys {
-    pub fn get_readonly_accounts<'a>(&'a self) -> Vec<&'a Pubkey> {
-        let mut read_only_accounts = Vec::with_capacity(6 * self.pool_keys.len() + 2);
+    pub fn get_readonly_accounts<'a>(&'a self, readonly_accounts: &mut HashSet<&'a Pubkey>) {
         for pool_keys in &self.pool_keys {
-            read_only_accounts.push(&pool_keys.pool);
-            read_only_accounts.push(&pool_keys.pool_authority);
+            readonly_accounts.insert(&pool_keys.pool);
+            readonly_accounts.insert(&pool_keys.pool_authority);
             if pool_keys.source.is_some() && pool_keys.destination.is_some() {
                 continue;
             }
-            read_only_accounts.push(&pool_keys.token_a);
-            read_only_accounts.push(&pool_keys.token_b);
-            read_only_accounts.push(&pool_keys.pool_mint);
-            read_only_accounts.push(&pool_keys.pool_fee);
+            readonly_accounts.insert(&pool_keys.token_a);
+            readonly_accounts.insert(&pool_keys.token_b);
+            readonly_accounts.insert(&pool_keys.pool_mint);
+            readonly_accounts.insert(&pool_keys.pool_fee);
         }
         if let Some(user_authority) = &self.user_authority {
-            read_only_accounts.push(user_authority);
+            readonly_accounts.insert(user_authority);
         }
-        read_only_accounts.push(&self.token_program);
-        read_only_accounts
+        readonly_accounts.insert(&self.token_program);
     }
 
-    pub fn get_write_accounts<'a>(&'a self) -> Vec<&'a Pubkey> {
-        let mut write_accounts = Vec::with_capacity(6 * self.pool_keys.len());
+    pub fn get_write_accounts<'a>(&'a self, write_accounts: &mut HashSet<&'a Pubkey>) {
         for pool_keys in &self.pool_keys {
             match (&pool_keys.source, &pool_keys.destination) {
                 (Some(source), Some(destination)) => {
-                    write_accounts.push(source);
-                    write_accounts.push(destination);
-                    write_accounts.push(&pool_keys.token_a);
-                    write_accounts.push(&pool_keys.token_b);
-                    write_accounts.push(&pool_keys.pool_mint);
-                    write_accounts.push(&pool_keys.pool_fee);
+                    write_accounts.insert(source);
+                    write_accounts.insert(destination);
+                    write_accounts.insert(&pool_keys.token_a);
+                    write_accounts.insert(&pool_keys.token_b);
+                    write_accounts.insert(&pool_keys.pool_mint);
+                    write_accounts.insert(&pool_keys.pool_fee);
                 }
                 _ => continue,
             }
         }
-        write_accounts
     }
 }
 
