@@ -31,7 +31,7 @@ use crate::{
     accounts::LoadedTransaction,
     accounts::{
         Accounts,
-        MevAccountOrIdx::{self, Idx, ReadAccount, WriteAccount},
+        MevAccountOrIdx::{Idx, ReadAccount, WriteAccount},
     },
     inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
@@ -267,10 +267,11 @@ impl Mev {
                     .pool_accounts
                     .iter()
                     .map(|mev_account| {
-                        let get_account = |account_ref: &'a MevAccountOrIdx| match account_ref {
-                            Idx(idx) => &loaded_transaction.accounts[*idx],
-                            ReadAccount(acc) | WriteAccount(acc) => acc,
-                        };
+                        let get_account =
+                            |pubkey: &'a Pubkey| match &mev_accounts.pubkey_account_map[pubkey] {
+                                Idx(idx) => &loaded_transaction.accounts[*idx],
+                                ReadAccount(acc) | WriteAccount(acc) => &acc,
+                            };
                         let pool_acc = get_account(&mev_account.pool);
                         let pool = SwapVersion::unpack(pool_acc.1.data())?;
 
