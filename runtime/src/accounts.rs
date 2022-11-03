@@ -133,21 +133,25 @@ pub enum MevAccountOrIdx {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct MevPoolAccounts {
-    pub pool: MevAccountOrIdx,
-    pub source: Option<MevAccountOrIdx>,
-    pub destination: Option<MevAccountOrIdx>,
-    pub token_a: MevAccountOrIdx,
-    pub token_b: MevAccountOrIdx,
-    pub pool_mint: MevAccountOrIdx,
-    pub pool_fee: MevAccountOrIdx,
-    pub pool_authority: MevAccountOrIdx,
+    pub pool: Pubkey,
+    pub source: Option<Pubkey>,
+    pub destination: Option<Pubkey>,
+    pub token_a: Pubkey,
+    pub token_b: Pubkey,
+    pub pool_mint: Pubkey,
+    pub pool_fee: Pubkey,
+    pub pool_authority: Pubkey,
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct MevAccounts {
+    // All accounts are referenced by `Pubkey` inside `pubkey_account_map`.
     pub pool_accounts: Vec<MevPoolAccounts>,
-    pub token_program: MevAccountOrIdx,
-    pub user_authority: Option<MevAccountOrIdx>,
+    pub token_program: Pubkey,
+    pub user_authority: Option<Pubkey>,
+
+    // Stores all the accounts.
+    pub pubkey_account_map: HashMap<Pubkey, MevAccountOrIdx>,
 }
 
 impl MevAccounts {
@@ -158,8 +162,9 @@ impl MevAccounts {
         ancestors: &Ancestors,
         load_zero_lamports: LoadZeroLamports,
     ) -> Self {
-        let get_account_or_idx = |pubkey: &Pubkey, is_writable: bool| -> MevAccountOrIdx {
-            writable_accounts_map
+        let mut pubkey_account_map = HashMap::new();
+        let mut insert_account_in_map = |pubkey: &Pubkey, is_writable: bool| {
+            let acc = writable_accounts_map
                 .get(pubkey)
                 .map(|idx| MevAccountOrIdx::Idx(*idx))
                 .unwrap_or_else(|| {
@@ -171,44 +176,52 @@ impl MevAccounts {
                     } else {
                         MevAccountOrIdx::ReadAccount((*pubkey, account))
                     }
-                })
+                });
+            pubkey_account_map.insert(*pubkey, acc);
         };
 
         let mut pool_accounts = Vec::with_capacity(mev_keys.pool_keys.len());
         for pool_keys in &mev_keys.pool_keys {
             let is_writable = pool_keys.source.is_some() && pool_keys.destination.is_some();
 
-            let pool = get_account_or_idx(&pool_keys.pool, false);
-            let token_a = get_account_or_idx(&pool_keys.token_a, is_writable);
-            let token_b = get_account_or_idx(&pool_keys.token_b, is_writable);
-            let pool_mint = get_account_or_idx(&pool_keys.pool_mint, is_writable);
-            let pool_fee = get_account_or_idx(&pool_keys.pool_fee, is_writable);
+            insert_account_in_map(&pool_keys.pool, false);
+            insert_account_in_map(&pool_keys.token_a, is_writable);
+            insert_account_in_map(&pool_keys.token_b, is_writable);
+            insert_account_in_map(&pool_keys.pool_mint, is_writable);
+            insert_account_in_map(&pool_keys.pool_fee, is_writable);
+            insert_account_in_map(&pool_keys.pool_authority, false);
 
-            let pool_authority = get_account_or_idx(&pool_keys.pool_authority, false);
+            let source = pool_keys.source.map(|src| {
+                insert_account_in_map(&src, is_writable);
+                src
+            });
+
+            let destination = pool_keys.destination.map(|dst| {
+                insert_account_in_map(&dst, is_writable);
+                dst
+            });
 
             pool_accounts.push(MevPoolAccounts {
-                pool,
-                source: pool_keys
-                    .source
-                    .map(|src| get_account_or_idx(&src, is_writable)),
-                destination: pool_keys
-                    .destination
-                    .map(|dst| get_account_or_idx(&dst, is_writable)),
-                token_a,
-                token_b,
-                pool_mint,
-                pool_fee,
-                pool_authority,
+                pool: pool_keys.pool,
+                source,
+                destination,
+                token_a: pool_keys.token_a,
+                token_b: pool_keys.token_b,
+                pool_mint: pool_keys.pool_mint,
+                pool_fee: pool_keys.pool_fee,
+                pool_authority: pool_keys.pool_authority,
             });
         }
-        let token_program = get_account_or_idx(&mev_keys.token_program, false);
+        insert_account_in_map(&mev_keys.token_program, false);
 
         MevAccounts {
             pool_accounts,
-            token_program,
-            user_authority: mev_keys
-                .user_authority
-                .map(|user_authority| get_account_or_idx(&user_authority, false)),
+            token_program: mev_keys.token_program,
+            user_authority: mev_keys.user_authority.map(|user_authority| {
+                insert_account_in_map(&user_authority, false);
+                user_authority
+            }),
+            pubkey_account_map,
         }
     }
 }
@@ -332,7 +345,7 @@ impl Accounts {
         })
     }
 
-    fn load_transaction(
+    pub fn load_transaction(
         &self,
         ancestors: &Ancestors,
         tx: &SanitizedTransaction,
@@ -341,7 +354,22 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
+        mev_accounts_loaded_tx: Option<&(MevAccounts, LoadedTransaction)>,
     ) -> Result<LoadedTransaction> {
+        let get_acc_from_mev = |key| -> Option<(AccountSharedData, Slot)> {
+            if let Some((mev_accounts, loaded_tx)) = mev_accounts_loaded_tx {
+                let mev_acc_or_idx = mev_accounts.pubkey_account_map.get(key)?;
+                Some(match mev_acc_or_idx {
+                    MevAccountOrIdx::Idx(idx) => (loaded_tx.accounts[*idx].1.clone(), 0),
+                    MevAccountOrIdx::ReadAccount(acc) | MevAccountOrIdx::WriteAccount(acc) => {
+                        (acc.1.clone(), 0)
+                    }
+                })
+            } else {
+                None
+            }
+        };
+
         let load_zero_lamports =
             if feature_set.is_active(&return_none_for_zero_lamport_accounts::id()) {
                 LoadZeroLamports::None
@@ -384,8 +412,11 @@ impl Accounts {
                         {
                             (account_override.clone(), 0)
                         } else {
-                            self.accounts_db
-                                .load_with_fixed_root(ancestors, key, load_zero_lamports)
+                            let tx_acc = get_acc_from_mev(key).or(self
+                                .accounts_db
+                                .load_with_fixed_root(ancestors, key, load_zero_lamports));
+
+                            tx_acc
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
@@ -689,6 +720,7 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
+                        None,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
