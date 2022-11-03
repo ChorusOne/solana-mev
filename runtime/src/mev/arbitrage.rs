@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use solana_sdk::{
+    feature_set::FeatureSet,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -14,7 +15,13 @@ use spl_token_swap::{
     instruction::{Swap, SwapInstruction},
 };
 
-use crate::{accounts::Accounts, inline_spl_token};
+use crate::{
+    ancestors::Ancestors,
+    accounts::{Accounts, LoadedTransaction, MevAccounts},
+    inline_spl_token,
+    rent_collector::RentCollector,
+    transaction_error_metrics::TransactionErrorMetrics,
+};
 
 use super::{
     utils::{deserialize_b58, serialize_b58},
@@ -55,8 +62,14 @@ impl MevPath {
         pool_states: &PoolStates,
         user_transfer_authority: Option<&Keypair>,
         blockhash: Hash,
+        ancestors: &Ancestors,
+        fee: u64,
+        error_counters: &mut TransactionErrorMetrics,
+        rent_collector: &RentCollector,
+        feature_set: &FeatureSet,
+        mev_accounts_loaded_tx: Option<&(MevAccounts, LoadedTransaction)>,
         accounts: &Arc<Accounts>,
-    ) -> Option<Vec<SanitizedTransaction>> {
+    ) -> Option<Vec<(SanitizedTransaction, LoadedTransaction)>> {
         let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
         let mut amount_in = initial_amount;
         let mut sanitized_txs = Vec::with_capacity(self.path.len());
@@ -103,7 +116,23 @@ impl MevPath {
                 minimum_amount_out: 0,
                 blockhash,
             };
-            sanitized_txs.push(create_swap_tx(swap_arguments));
+
+            let sanitized_tx = create_swap_tx(swap_arguments);
+
+            let loaded_tx = accounts
+                .load_transaction(
+                    ancestors,
+                    &sanitized_tx,
+                    fee,
+                    error_counters,
+                    rent_collector,
+                    feature_set,
+                    None,
+                    mev_accounts_loaded_tx,
+                )
+                .expect("Constructed by us, shouldn't fail");
+            sanitized_txs.push((sanitized_tx, loaded_tx));
+
             amount_in = destination_amount_swapped;
         }
         if amount_in <= initial_amount {
