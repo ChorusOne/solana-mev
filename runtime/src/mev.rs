@@ -29,16 +29,15 @@ use spl_token_swap::{curve::calculator::CurveCalculator, state::SwapVersion};
 
 use crate::{
     accounts::LoadedTransaction,
-    accounts::{
-        Accounts,
-        MevAccountOrIdx::{Idx, ReadAccount, WriteAccount},
-    },
+    accounts::MevAccountOrIdx::{Idx, ReadAccount, WriteAccount},
     inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
 };
 
 use self::{
-    arbitrage::{get_arbitrage_idxs, MevOpportunityWithInput, MevPath},
+    arbitrage::{
+        get_arbitrage_tx_outputs, LoadTxArguments, MevOpportunityWithInput, MevPath, MevTxOutput,
+    },
     utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
 
@@ -184,7 +183,7 @@ impl Serialize for PoolStates {
 
 pub enum MevMsg {
     Log(PrePostPoolStates),
-    Opportunities(Vec<(usize, f64)>),
+    Opportunities(Vec<MevTxOutput>),
     Exit,
 }
 
@@ -332,15 +331,22 @@ impl Mev {
     pub fn execute_and_log_mev_opportunities(
         &self,
         tx: &SanitizedTransaction,
-        loaded_transaction: &mut LoadedTransaction,
         slot: Slot,
         pre_tx_pool_state: PoolStates,
-        accounts: &Arc<Accounts>,
-    ) -> Option<()> {
+        load_tx_arguments: &mut LoadTxArguments,
+        blockhash: Hash,
+    ) -> Option<Vec<(SanitizedTransaction, LoadedTransaction)>> {
         let post_tx_pool_state = self
-            .get_all_orca_monitored_accounts(loaded_transaction)?
+            .get_all_orca_monitored_accounts(load_tx_arguments.loaded_tx)?
             .ok()?;
-        let mev_idx_input = get_arbitrage_idxs(&self.mev_paths, &post_tx_pool_state);
+        let mut mev_tx_outputs = get_arbitrage_tx_outputs(
+            &self.mev_paths,
+            &post_tx_pool_state,
+            self.orca_program,
+            self.user_authority.as_ref().as_ref(),
+            blockhash,
+            load_tx_arguments,
+        );
 
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
@@ -351,17 +357,31 @@ impl Mev {
         })) {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
-        if !mev_idx_input.is_empty() {
+
+        let sanitized_tx_loaded_acc_vec = mev_tx_outputs
+            .iter_mut()
+            .map(|tx_output| {
+                let mut sanitized_loaded_txs = Vec::new();
+                std::mem::swap(
+                    &mut sanitized_loaded_txs,
+                    &mut tx_output.sanitized_loaded_txs,
+                );
+                sanitized_loaded_txs
+            })
+            .flatten()
+            .collect();
+
+        if !mev_tx_outputs.is_empty() {
             if let Err(err) = self
                 .log_send_channel
-                .send(MevMsg::Opportunities(mev_idx_input))
+                .send(MevMsg::Opportunities(mev_tx_outputs))
             {
                 error!("[MEV] Could not log arbitrage, error: {}", err);
             }
+            Some(sanitized_tx_loaded_acc_vec)
+        } else {
+            None
         }
-
-        // TODO: Return something once we exploit arbitrage opportunities.
-        None
     }
 }
 
@@ -385,12 +405,12 @@ impl MevLog {
                 )
                 .expect("[MEV] Could not write log to file"),
 
-                Ok(MevMsg::Opportunities(mev_idx_input)) => {
-                    let mev_paths_input: Vec<MevOpportunityWithInput> = mev_idx_input
+                Ok(MevMsg::Opportunities(mev_tx_output)) => {
+                    let mev_paths_input: Vec<MevOpportunityWithInput> = mev_tx_output
                         .into_iter()
-                        .map(|(i, input)| MevOpportunityWithInput {
-                            opportunity: &mev_paths[i],
-                            input,
+                        .map(|mev_tx_output| MevOpportunityWithInput {
+                            opportunity: &mev_paths[mev_tx_output.path_idx],
+                            input_output_pairs: mev_tx_output.input_output_pairs,
                         })
                         .collect();
                     writeln!(

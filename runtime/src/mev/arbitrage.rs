@@ -16,8 +16,8 @@ use spl_token_swap::{
 };
 
 use crate::{
+    accounts::{Accounts, LoadedTransaction},
     ancestors::Ancestors,
-    accounts::{Accounts, LoadedTransaction, MevAccounts},
     inline_spl_token,
     rent_collector::RentCollector,
     transaction_error_metrics::TransactionErrorMetrics,
@@ -52,7 +52,24 @@ pub struct MevPath {
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct MevOpportunityWithInput<'a> {
     pub opportunity: &'a MevPath,
-    pub input: f64,
+    pub input_output_pairs: Vec<(u64, u64)>,
+}
+
+pub struct LoadTxArguments<'a> {
+    pub ancestors: &'a Ancestors,
+    pub fee: u64,
+    pub error_counters: &'a mut TransactionErrorMetrics,
+    pub rent_collector: &'a RentCollector,
+    pub feature_set: &'a FeatureSet,
+    pub loaded_tx: &'a LoadedTransaction,
+    pub accounts: &'a Arc<Accounts>,
+}
+
+pub struct MevTxOutput {
+    pub sanitized_loaded_txs: Vec<(SanitizedTransaction, LoadedTransaction)>,
+    // Index from the Path vector.
+    pub path_idx: usize,
+    pub input_output_pairs: Vec<(u64, u64)>,
 }
 
 impl MevPath {
@@ -62,17 +79,13 @@ impl MevPath {
         pool_states: &PoolStates,
         user_transfer_authority: Option<&Keypair>,
         blockhash: Hash,
-        ancestors: &Ancestors,
-        fee: u64,
-        error_counters: &mut TransactionErrorMetrics,
-        rent_collector: &RentCollector,
-        feature_set: &FeatureSet,
-        mev_accounts_loaded_tx: Option<&(MevAccounts, LoadedTransaction)>,
-        accounts: &Arc<Accounts>,
-    ) -> Option<Vec<(SanitizedTransaction, LoadedTransaction)>> {
+        load_tx_args: &mut LoadTxArguments,
+        path_idx: usize,
+    ) -> Option<MevTxOutput> {
         let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
         let mut amount_in = initial_amount;
-        let mut sanitized_txs = Vec::with_capacity(self.path.len());
+        let mut sanitized_loaded_txs = Vec::with_capacity(self.path.len());
+        let mut input_output_pairs = Vec::with_capacity(self.path.len());
 
         for pair_info in &self.path {
             let pool_state = pool_states.0.get(&pair_info.pool)?;
@@ -97,8 +110,11 @@ impl MevPath {
                 pool_state.pool_b_balance as u128,
                 trade_direction,
             )?;
-
             let source_amount_swapped = source_amount_swapped.checked_add(total_fees)?;
+            input_output_pairs.push((
+                source_amount_swapped as u64,
+                destination_amount_swapped as u64,
+            ));
 
             let swap_arguments = SwapArguments {
                 program_id,
@@ -119,19 +135,20 @@ impl MevPath {
 
             let sanitized_tx = create_swap_tx(swap_arguments);
 
-            let loaded_tx = accounts
+            let loaded_tx = load_tx_args
+                .accounts
                 .load_transaction(
-                    ancestors,
+                    load_tx_args.ancestors,
                     &sanitized_tx,
-                    fee,
-                    error_counters,
-                    rent_collector,
-                    feature_set,
+                    load_tx_args.fee,
+                    &mut load_tx_args.error_counters,
+                    load_tx_args.rent_collector,
+                    load_tx_args.feature_set,
                     None,
-                    mev_accounts_loaded_tx,
+                    Some(load_tx_args.loaded_tx),
                 )
                 .expect("Constructed by us, shouldn't fail");
-            sanitized_txs.push((sanitized_tx, loaded_tx));
+            sanitized_loaded_txs.push((sanitized_tx, loaded_tx));
 
             amount_in = destination_amount_swapped;
         }
@@ -140,7 +157,11 @@ impl MevPath {
             // `None`.
             None
         } else {
-            Some(sanitized_txs)
+            Some(MevTxOutput {
+                sanitized_loaded_txs,
+                path_idx,
+                input_output_pairs,
+            })
         }
     }
 
@@ -196,13 +217,26 @@ impl MevPath {
     }
 }
 
-pub fn get_arbitrage_idxs(mev_paths: &[MevPath], pool_states: &PoolStates) -> Vec<(usize, f64)> {
+pub fn get_arbitrage_tx_outputs(
+    mev_paths: &[MevPath],
+    pool_states: &PoolStates,
+    program_id: Pubkey,
+    user_transfer_authority: Option<&Keypair>,
+    blockhash: Hash,
+    load_tx_args: &mut LoadTxArguments,
+) -> Vec<MevTxOutput> {
     mev_paths
-        .iter()
+        .into_iter()
         .enumerate()
         .filter_map(|(i, path)| {
-            path.does_arbitrage_opportunity_exist(pool_states)
-                .map(|input| (i, input))
+            path.get_mev_txs(
+                program_id,
+                pool_states,
+                user_transfer_authority,
+                blockhash,
+                load_tx_args,
+                i,
+            )
         })
         .collect()
 }
