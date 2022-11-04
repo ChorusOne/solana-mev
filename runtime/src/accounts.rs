@@ -354,11 +354,15 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        mev_accounts_loaded_tx: Option<&(MevAccounts, LoadedTransaction)>,
+        loaded_tx: Option<&LoadedTransaction>,
     ) -> Result<LoadedTransaction> {
         let get_acc_from_mev = |key| -> Option<(AccountSharedData, Slot)> {
-            if let Some((mev_accounts, loaded_tx)) = mev_accounts_loaded_tx {
-                let mev_acc_or_idx = mev_accounts.pubkey_account_map.get(key)?;
+            if let Some(loaded_tx) = loaded_tx {
+                let mev_acc_or_idx = loaded_tx
+                    .mev_accounts
+                    .as_ref()?
+                    .pubkey_account_map
+                    .get(key)?;
                 Some(match mev_acc_or_idx {
                     MevAccountOrIdx::Idx(idx) => (loaded_tx.accounts[*idx].1.clone(), 0),
                     MevAccountOrIdx::ReadAccount(acc) | MevAccountOrIdx::WriteAccount(acc) => {
