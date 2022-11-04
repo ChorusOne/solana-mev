@@ -4258,7 +4258,7 @@ impl Bank {
                             self.slot,
                             pre_pool_state,
                             &mut load_tx_arguments,
-                            Hash::default(),
+                            *tx.message().recent_blockhash(),
                         );
                         if let Some(sanitized_loaded_txs) = sanitized_loaded_txs_opt {
                             for (sanitized_tx, mut loaded_tx) in sanitized_loaded_txs {
