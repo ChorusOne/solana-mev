@@ -53,10 +53,11 @@ pub struct InputOutputPairs {
 }
 
 pub struct MevTxOutput {
-    pub sanitized_loaded_txs: Vec<SanitizedTransaction>,
+    pub sanitized_txs: Vec<SanitizedTransaction>,
     // Index from the Path vector.
     pub path_idx: usize,
     pub input_output_pairs: Vec<InputOutputPairs>,
+    pub profit: u64,
 }
 
 impl MevPath {
@@ -70,7 +71,7 @@ impl MevPath {
     ) -> Option<MevTxOutput> {
         let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
         let mut amount_in = initial_amount;
-        let mut sanitized_loaded_txs = Vec::with_capacity(self.path.len());
+        let mut sanitized_txs = Vec::with_capacity(self.path.len());
         let mut input_output_pairs = Vec::with_capacity(self.path.len());
 
         for pair_info in &self.path {
@@ -120,7 +121,7 @@ impl MevPath {
             };
 
             let sanitized_tx = create_swap_tx(swap_arguments);
-            sanitized_loaded_txs.push(sanitized_tx);
+            sanitized_txs.push(sanitized_tx);
 
             amount_in = destination_amount_swapped;
         }
@@ -130,9 +131,10 @@ impl MevPath {
             None
         } else {
             Some(MevTxOutput {
-                sanitized_loaded_txs,
+                sanitized_txs,
                 path_idx,
                 input_output_pairs,
+                profit: amount_in.saturating_sub(initial_amount) as u64,
             })
         }
     }
