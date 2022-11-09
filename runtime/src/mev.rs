@@ -35,9 +35,7 @@ use crate::{
 };
 
 use self::{
-    arbitrage::{
-        get_arbitrage_tx_outputs, LoadTxArguments, MevOpportunityWithInput, MevPath, MevTxOutput,
-    },
+    arbitrage::{get_arbitrage_tx_outputs, MevOpportunityWithInput, MevPath, MevTxOutput},
     utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
 
@@ -326,26 +324,23 @@ impl Mev {
             .any(|account_key| &self.orca_program == account_key)
     }
 
-    /// Execute and log the pool state after a transaction interacted with one or more
+    /// Log the pool state after a transaction interacted with one or more
     /// account from the pool.
-    pub fn execute_and_log_mev_opportunities(
+    pub fn log_mev_opportunities(
         &self,
         tx: &SanitizedTransaction,
         slot: Slot,
         pre_tx_pool_state: PoolStates,
-        load_tx_arguments: &mut LoadTxArguments,
+        loaded_tx: &LoadedTransaction,
         blockhash: Hash,
-    ) -> Option<Vec<(SanitizedTransaction, LoadedTransaction)>> {
-        let post_tx_pool_state = self
-            .get_all_orca_monitored_accounts(load_tx_arguments.loaded_tx)?
-            .ok()?;
+    ) -> Option<Vec<SanitizedTransaction>> {
+        let post_tx_pool_state = self.get_all_orca_monitored_accounts(loaded_tx)?.ok()?;
         let mut mev_tx_outputs = get_arbitrage_tx_outputs(
             &self.mev_paths,
             &post_tx_pool_state,
             self.orca_program,
             self.user_authority.as_ref().as_ref(),
             blockhash,
-            load_tx_arguments,
         );
 
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
@@ -358,7 +353,7 @@ impl Mev {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
 
-        let sanitized_tx_loaded_acc_vec = mev_tx_outputs
+        let sanitized_tx_vec = mev_tx_outputs
             .iter_mut()
             .map(|tx_output| {
                 let mut sanitized_loaded_txs = Vec::new();
@@ -378,7 +373,7 @@ impl Mev {
             {
                 error!("[MEV] Could not log arbitrage, error: {}", err);
             }
-            Some(sanitized_tx_loaded_acc_vec)
+            Some(sanitized_tx_vec)
         } else {
             None
         }

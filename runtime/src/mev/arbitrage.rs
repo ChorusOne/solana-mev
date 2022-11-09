@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use serde::Serialize;
 use solana_sdk::{
-    feature_set::FeatureSet,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
@@ -15,13 +12,7 @@ use spl_token_swap::{
     instruction::{Swap, SwapInstruction},
 };
 
-use crate::{
-    accounts::{Accounts, LoadedTransaction},
-    ancestors::Ancestors,
-    inline_spl_token,
-    rent_collector::RentCollector,
-    transaction_error_metrics::TransactionErrorMetrics,
-};
+use crate::inline_spl_token;
 
 use super::{
     utils::{deserialize_b58, serialize_b58},
@@ -52,24 +43,20 @@ pub struct MevPath {
 #[derive(Debug, PartialEq, Clone, Serialize)]
 pub struct MevOpportunityWithInput<'a> {
     pub opportunity: &'a MevPath,
-    pub input_output_pairs: Vec<(u64, u64)>,
+    pub input_output_pairs: Vec<InputOutputPairs>,
 }
 
-pub struct LoadTxArguments<'a> {
-    pub ancestors: &'a Ancestors,
-    pub fee: u64,
-    pub error_counters: &'a mut TransactionErrorMetrics,
-    pub rent_collector: &'a RentCollector,
-    pub feature_set: &'a FeatureSet,
-    pub loaded_tx: &'a LoadedTransaction,
-    pub accounts: &'a Arc<Accounts>,
+#[derive(Debug, PartialEq, Clone, Serialize)]
+pub struct InputOutputPairs {
+    pub token_in: u64,
+    pub token_out: u64,
 }
 
 pub struct MevTxOutput {
-    pub sanitized_loaded_txs: Vec<(SanitizedTransaction, LoadedTransaction)>,
+    pub sanitized_loaded_txs: Vec<SanitizedTransaction>,
     // Index from the Path vector.
     pub path_idx: usize,
-    pub input_output_pairs: Vec<(u64, u64)>,
+    pub input_output_pairs: Vec<InputOutputPairs>,
 }
 
 impl MevPath {
@@ -79,7 +66,6 @@ impl MevPath {
         pool_states: &PoolStates,
         user_transfer_authority: Option<&Keypair>,
         blockhash: Hash,
-        load_tx_args: &mut LoadTxArguments,
         path_idx: usize,
     ) -> Option<MevTxOutput> {
         let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
@@ -111,10 +97,10 @@ impl MevPath {
                 trade_direction,
             )?;
             let source_amount_swapped = source_amount_swapped.checked_add(total_fees)?;
-            input_output_pairs.push((
-                source_amount_swapped as u64,
-                destination_amount_swapped as u64,
-            ));
+            input_output_pairs.push(InputOutputPairs {
+                token_in: source_amount_swapped as u64,
+                token_out: destination_amount_swapped as u64,
+            });
 
             let swap_arguments = SwapArguments {
                 program_id,
@@ -134,21 +120,7 @@ impl MevPath {
             };
 
             let sanitized_tx = create_swap_tx(swap_arguments);
-
-            let loaded_tx = load_tx_args
-                .accounts
-                .load_transaction(
-                    load_tx_args.ancestors,
-                    &sanitized_tx,
-                    load_tx_args.fee,
-                    &mut load_tx_args.error_counters,
-                    load_tx_args.rent_collector,
-                    load_tx_args.feature_set,
-                    None,
-                    Some(load_tx_args.loaded_tx),
-                )
-                .expect("Constructed by us, shouldn't fail");
-            sanitized_loaded_txs.push((sanitized_tx, loaded_tx));
+            sanitized_loaded_txs.push(sanitized_tx);
 
             amount_in = destination_amount_swapped;
         }
@@ -223,7 +195,6 @@ pub fn get_arbitrage_tx_outputs(
     program_id: Pubkey,
     user_transfer_authority: Option<&Keypair>,
     blockhash: Hash,
-    load_tx_args: &mut LoadTxArguments,
 ) -> Vec<MevTxOutput> {
     mev_paths
         .into_iter()
@@ -234,7 +205,6 @@ pub fn get_arbitrage_tx_outputs(
                 pool_states,
                 user_transfer_authority,
                 blockhash,
-                load_tx_args,
                 i,
             )
         })
