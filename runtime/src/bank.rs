@@ -538,7 +538,7 @@ pub struct BankRc {
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 use solana_frozen_abi::abi_example::AbiExample;
 
-use crate::mev::{arbitrage::LoadTxArguments, Mev};
+use crate::mev::Mev;
 
 #[cfg(RUSTC_WITH_SPECIALIZATION)]
 impl AbiExample for BankRc {
@@ -4222,58 +4222,13 @@ impl Bank {
                             .as_ref()
                             .expect("Is Some because we have a pre pool state.");
 
-                        let lamports_per_signature = nonce
-                            .as_ref()
-                            .map(|nonce| nonce.lamports_per_signature())
-                            .unwrap_or_else(|| {
-                                self.blockhash_queue
-                                    .read()
-                                    .unwrap()
-                                    .get_lamports_per_signature(tx.message().recent_blockhash())
-                            });
-
-                        let fee = if let Some(lamports_per_signature) = lamports_per_signature {
-                            Bank::calculate_fee(
-                                tx.message(),
-                                lamports_per_signature,
-                                &self.fee_structure,
-                                feature_set.is_active(&tx_wide_compute_cap::id()),
-                                feature_set.is_active(&add_set_compute_unit_price_ix::id()),
-                            )
-                        } else {
-                            0
-                        };
-
-                        let mut load_tx_arguments = LoadTxArguments {
-                            ancestors: &self.ancestors,
-                            fee,
-                            error_counters: &mut error_counters,
-                            rent_collector: &self.rent_collector,
-                            feature_set: &feature_set,
-                            loaded_tx: &loaded_transaction,
-                            accounts: &self.rc.accounts,
-                        };
-                        let sanitized_loaded_txs_opt = mev.execute_and_log_mev_opportunities(
+                        let sanitized_loaded_txs_opt = mev.log_mev_opportunities(
                             tx,
                             self.slot,
                             pre_pool_state,
-                            &mut load_tx_arguments,
+                            &loaded_transaction,
                             *tx.message().recent_blockhash(),
                         );
-                        if let Some(sanitized_loaded_txs) = sanitized_loaded_txs_opt {
-                            for (sanitized_tx, mut loaded_tx) in sanitized_loaded_txs {
-                                execution_results.push(self.execute_loaded_transaction(
-                                    &sanitized_tx,
-                                    &mut loaded_tx,
-                                    compute_budget,
-                                    None,
-                                    enable_cpi_recording,
-                                    enable_log_recording,
-                                    timings,
-                                    &mut error_counters,
-                                ));
-                            }
-                        }
                     }
                 }
             }
