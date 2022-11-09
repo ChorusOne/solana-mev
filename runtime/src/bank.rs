@@ -677,6 +677,8 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
     pub error_counters: TransactionErrorMetrics,
+    /// MEV transaction to be included in the next batch.
+    pub mev_sanitized_tx: Option<Vec<SanitizedTransaction>>,
 }
 
 #[derive(Debug, Clone)]
@@ -4153,6 +4155,8 @@ impl Bank {
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
         let mut execution_results = Vec::with_capacity(sanitized_txs.len());
+        let mut mev_sanitized_tx_profit: Option<(Vec<SanitizedTransaction>, u64)> = None;
+
         for (accs, tx) in loaded_transactions.iter_mut().zip(sanitized_txs.iter()) {
             match accs {
                 (Err(e), _nonce) => {
@@ -4222,13 +4226,20 @@ impl Bank {
                             .as_ref()
                             .expect("Is Some because we have a pre pool state.");
 
-                        let sanitized_loaded_txs_opt = mev.log_mev_opportunities(
-                            tx,
-                            self.slot,
-                            pre_pool_state,
-                            &loaded_transaction,
-                            *tx.message().recent_blockhash(),
-                        );
+                        if let Some((sanitized_txs, profit)) = mev
+                            .log_mev_opportunities_get_max_profit_tx(
+                                tx,
+                                self.slot,
+                                pre_pool_state,
+                                &loaded_transaction,
+                                *tx.message().recent_blockhash(),
+                            )
+                        {
+                            if !matches!(mev_sanitized_tx_profit, Some(ref tx_profit) if tx_profit.1 >= profit)
+                            {
+                                mev_sanitized_tx_profit.replace((sanitized_txs, profit));
+                            }
+                        }
                     }
                 }
             }
@@ -4357,6 +4368,7 @@ impl Bank {
             executed_with_successful_result_count,
             signature_count,
             error_counters,
+            mev_sanitized_tx: mev_sanitized_tx_profit.map(|(tx, _profit)| tx),
         }
     }
 

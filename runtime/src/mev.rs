@@ -325,15 +325,16 @@ impl Mev {
     }
 
     /// Log the pool state after a transaction interacted with one or more
-    /// account from the pool.
-    pub fn log_mev_opportunities(
+    /// account from the pool
+    /// Returns the most profitable MEV tx.
+    pub fn log_mev_opportunities_get_max_profit_tx(
         &self,
         tx: &SanitizedTransaction,
         slot: Slot,
         pre_tx_pool_state: PoolStates,
         loaded_tx: &LoadedTransaction,
         blockhash: Hash,
-    ) -> Option<Vec<SanitizedTransaction>> {
+    ) -> Option<(Vec<SanitizedTransaction>, u64)> {
         let post_tx_pool_state = self.get_all_orca_monitored_accounts(loaded_tx)?.ok()?;
         let mut mev_tx_outputs = get_arbitrage_tx_outputs(
             &self.mev_paths,
@@ -353,30 +354,21 @@ impl Mev {
             error!("[MEV] Could not log pool states, error: {}", err);
         }
 
-        let sanitized_tx_vec = mev_tx_outputs
+        let mev_tx_output = mev_tx_outputs
             .iter_mut()
-            .map(|tx_output| {
-                let mut sanitized_loaded_txs = Vec::new();
-                std::mem::swap(
-                    &mut sanitized_loaded_txs,
-                    &mut tx_output.sanitized_loaded_txs,
-                );
-                sanitized_loaded_txs
-            })
-            .flatten()
-            .collect();
+            .max_by(|a, b| a.profit.cmp(&b.profit))?;
 
-        if !mev_tx_outputs.is_empty() {
-            if let Err(err) = self
-                .log_send_channel
-                .send(MevMsg::Opportunities(mev_tx_outputs))
-            {
-                error!("[MEV] Could not log arbitrage, error: {}", err);
-            }
-            Some(sanitized_tx_vec)
-        } else {
-            None
+        let mut sanitized_tx_vec = Vec::new();
+        std::mem::swap(&mut sanitized_tx_vec, &mut mev_tx_output.sanitized_txs);
+        let profit = mev_tx_output.profit;
+
+        if let Err(err) = self
+            .log_send_channel
+            .send(MevMsg::Opportunities(mev_tx_outputs))
+        {
+            error!("[MEV] Could not log arbitrage, error: {}", err);
         }
+        Some((sanitized_tx_vec, profit))
     }
 }
 
