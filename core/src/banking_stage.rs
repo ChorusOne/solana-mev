@@ -138,6 +138,8 @@ pub struct ExecuteAndCommitTransactionsOutput {
     commit_transactions_result: Result<Vec<CommitTransactionDetails>, PohRecorderError>,
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
     error_counters: TransactionErrorMetrics,
+
+    mev_sanitized_tx: Option<SanitizedTransaction>,
 }
 
 #[derive(Debug, Default)]
@@ -1504,6 +1506,7 @@ impl BankingStage {
             executed_with_successful_result_count,
             signature_count,
             error_counters,
+            mev_sanitized_tx,
             ..
         } = load_and_execute_transactions_output;
 
@@ -1572,6 +1575,7 @@ impl BankingStage {
                 commit_transactions_result: Err(e),
                 execute_and_commit_timings,
                 error_counters,
+                mev_sanitized_tx,
             };
         }
 
@@ -1663,6 +1667,7 @@ impl BankingStage {
             commit_transactions_result: Ok(transactions_execute_and_record_status),
             execute_and_commit_timings,
             error_counters,
+            mev_sanitized_tx,
         }
     }
 
@@ -1920,8 +1925,22 @@ impl BankingStage {
                 commit_transactions_result: new_commit_transactions_result,
                 execute_and_commit_timings: new_execute_and_commit_timings,
                 error_counters: new_error_counters,
+                mev_sanitized_tx,
                 ..
             } = execute_and_commit_transactions_output;
+
+            if let Some(mev_sanitized_tx) = mev_sanitized_tx {
+                let process_transaction_batch_output = Self::process_and_record_transactions(
+                    bank,
+                    &[mev_sanitized_tx],
+                    poh,
+                    chunk_start,
+                    transaction_status_sender.clone(),
+                    gossip_vote_sender,
+                    qos_service,
+                    mev,
+                );
+            }
 
             total_execute_and_commit_timings.accumulate(&new_execute_and_commit_timings);
             total_error_counters.accumulate(&new_error_counters);

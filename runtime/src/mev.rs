@@ -334,7 +334,7 @@ impl Mev {
         pre_tx_pool_state: PoolStates,
         loaded_tx: &LoadedTransaction,
         blockhash: Hash,
-    ) -> Option<(Vec<SanitizedTransaction>, u64)> {
+    ) -> Option<(SanitizedTransaction, u64)> {
         let post_tx_pool_state = self.get_all_orca_monitored_accounts(loaded_tx)?.ok()?;
         let mut mev_tx_outputs = get_arbitrage_tx_outputs(
             &self.mev_paths,
@@ -358,9 +358,8 @@ impl Mev {
             .iter_mut()
             .max_by(|a, b| a.profit.cmp(&b.profit))?;
 
-        let mut sanitized_tx_vec = Vec::new();
-        std::mem::swap(&mut sanitized_tx_vec, &mut mev_tx_output.sanitized_txs);
         let profit = mev_tx_output.profit;
+        let sanitized_tx = mev_tx_output.sanitized_tx.take();
 
         if let Err(err) = self
             .log_send_channel
@@ -368,7 +367,7 @@ impl Mev {
         {
             error!("[MEV] Could not log arbitrage, error: {}", err);
         }
-        Some((sanitized_tx_vec, profit))
+        Some((sanitized_tx?, profit))
     }
 }
 

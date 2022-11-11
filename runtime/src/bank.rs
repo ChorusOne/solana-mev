@@ -678,7 +678,7 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub signature_count: u64,
     pub error_counters: TransactionErrorMetrics,
     /// MEV transaction to be included in the next batch.
-    pub mev_sanitized_tx: Option<Vec<SanitizedTransaction>>,
+    pub mev_sanitized_tx: Option<SanitizedTransaction>,
 }
 
 #[derive(Debug, Clone)]
@@ -4155,7 +4155,7 @@ impl Bank {
         let mut execution_time = Measure::start("execution_time");
         let mut signature_count: u64 = 0;
         let mut execution_results = Vec::with_capacity(sanitized_txs.len());
-        let mut mev_sanitized_tx_profit: Option<(Vec<SanitizedTransaction>, u64)> = None;
+        let mut mev_sanitized_tx_profit: Option<(SanitizedTransaction, u64)> = None;
 
         for (accs, tx) in loaded_transactions.iter_mut().zip(sanitized_txs.iter()) {
             match accs {
