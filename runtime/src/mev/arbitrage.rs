@@ -1,3 +1,4 @@
+use log::warn;
 use serde::Serialize;
 use solana_sdk::{
     hash::Hash,
@@ -52,8 +53,11 @@ pub struct InputOutputPairs {
     pub token_out: u64,
 }
 
+#[derive(Debug)]
 pub struct MevTxOutput {
-    pub sanitized_txs: Vec<SanitizedTransaction>,
+    // Not every MevTxOutput carries transactions, but we still want to log
+    // them.
+    pub sanitized_tx: Option<SanitizedTransaction>,
     // Index from the Path vector.
     pub path_idx: usize,
     pub input_output_pairs: Vec<InputOutputPairs>,
@@ -69,69 +73,111 @@ impl MevPath {
         blockhash: Hash,
         path_idx: usize,
     ) -> Option<MevTxOutput> {
-        let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.ceil() as u128;
+        let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.floor() as u128;
         let mut amount_in = initial_amount;
-        let mut sanitized_txs = Vec::with_capacity(self.path.len());
         let mut input_output_pairs = Vec::with_capacity(self.path.len());
 
-        for pair_info in &self.path {
-            let pool_state = pool_states.0.get(&pair_info.pool)?;
+        let swap_arguments_vec = self
+            .path
+            .iter()
+            .map(|pair_info| {
+                let pool_state = pool_states.0.get(&pair_info.pool)?;
 
-            let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
-            let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
+                let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
+                let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
 
-            let total_fees = trade_fee.checked_add(owner_fee)?;
+                let total_fees = trade_fee.checked_add(owner_fee)?;
+                let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
 
-            let trade_direction = if pair_info.direction == TradeDirection::AtoB {
-                spl_token_swap::curve::calculator::TradeDirection::AtoB
-            } else {
-                spl_token_swap::curve::calculator::TradeDirection::BtoA
-            };
+                let (
+                    trade_direction,
+                    source_pubkey,
+                    swap_source_pubkey,
+                    destination_pubkey,
+                    swap_destination_pubkey,
+                    swap_source_amount,
+                    swap_destination_amount,
+                ) = match pair_info.direction {
+                    TradeDirection::AtoB => (
+                        spl_token_swap::curve::calculator::TradeDirection::AtoB,
+                        pool_state.pool.source,
+                        pool_state.pool.pool_a_account,
+                        pool_state.pool.destination,
+                        pool_state.pool.pool_b_account,
+                        pool_state.pool_a_balance,
+                        pool_state.pool_b_balance,
+                    ),
+                    TradeDirection::BtoA => (
+                        spl_token_swap::curve::calculator::TradeDirection::BtoA,
+                        pool_state.pool.destination,
+                        pool_state.pool.pool_b_account,
+                        pool_state.pool.source,
+                        pool_state.pool.pool_a_account,
+                        pool_state.pool_b_balance,
+                        pool_state.pool_a_balance,
+                    ),
+                };
 
-            let SwapWithoutFeesResult {
-                source_amount_swapped,
-                destination_amount_swapped,
-            } = pool_state.curve_calculator.swap_without_fees(
-                amount_in as u128,
-                pool_state.pool_a_balance as u128,
-                pool_state.pool_b_balance as u128,
-                trade_direction,
-            )?;
-            let source_amount_swapped = source_amount_swapped.checked_add(total_fees)?;
-            input_output_pairs.push(InputOutputPairs {
-                token_in: source_amount_swapped as u64,
-                token_out: destination_amount_swapped as u64,
-            });
+                // For the Constant Product Curve the `trade_direction` is
+                // ignored and it's our responsibility to provide the right
+                // token's balance from the pool.
+                let SwapWithoutFeesResult {
+                    source_amount_swapped: _,
+                    destination_amount_swapped,
+                } = pool_state.curve_calculator.swap_without_fees(
+                    source_amount_less_fees,
+                    swap_source_amount as u128,
+                    swap_destination_amount as u128,
+                    // Again, this argument is useless!
+                    trade_direction,
+                )?;
 
-            let swap_arguments = SwapArguments {
-                program_id,
-                swap_pubkey: pair_info.pool,
-                authority_pubkey: pool_state.pool.pool_authority,
-                user_transfer_authority: user_transfer_authority?,
-                source_pubkey: pool_state.pool.source?,
-                swap_source_pubkey: pool_state.pool.pool_a_account,
-                swap_destination_pubkey: pool_state.pool.pool_b_account,
-                destination_pubkey: pool_state.pool.destination?,
-                pool_mint_pubkey: pool_state.pool.pool_mint,
-                pool_fee_pubkey: pool_state.pool.pool_fee,
-                token_program: inline_spl_token::id(),
-                amount_in: amount_in as u64,
-                minimum_amount_out: 0,
-                blockhash,
-            };
+                input_output_pairs.push(InputOutputPairs {
+                    token_in: amount_in as u64,
+                    token_out: destination_amount_swapped as u64,
+                });
 
-            let sanitized_tx = create_swap_tx(swap_arguments);
-            sanitized_txs.push(sanitized_tx);
+                let swap_arguments = match (source_pubkey, destination_pubkey) {
+                    (Some(source), Some(destination)) => Some(SwapArguments {
+                        program_id,
+                        swap_pubkey: pair_info.pool,
+                        authority_pubkey: pool_state.pool.pool_authority,
+                        source_pubkey: source,
+                        swap_source_pubkey,
+                        swap_destination_pubkey,
+                        destination_pubkey: destination,
+                        pool_mint_pubkey: pool_state.pool.pool_mint,
+                        pool_fee_pubkey: pool_state.pool.pool_fee,
+                        token_program: inline_spl_token::id(),
+                        amount_in: amount_in as u64,
+                        minimum_amount_out: 0,
+                    }),
+                    _ => None,
+                };
 
-            amount_in = destination_amount_swapped;
-        }
+                amount_in = destination_amount_swapped;
+                swap_arguments
+            })
+            .collect::<Vec<Option<_>>>();
         if amount_in <= initial_amount {
             // If the the `amount_in` is less than the initial amount, return
             // `None`.
+            warn!("[MEV] The output amount is less than the initial amount, this shouldn't happen");
             None
         } else {
+            let sanitized_tx_opt = swap_arguments_vec
+                .into_iter()
+                .collect::<Option<Vec<_>>>()
+                .and_then(|swap_args| {
+                    Some(create_swap_tx(
+                        swap_args,
+                        blockhash,
+                        user_transfer_authority?,
+                    ))
+                });
+
             Some(MevTxOutput {
-                sanitized_txs,
+                sanitized_tx: sanitized_tx_opt,
                 path_idx,
                 input_output_pairs,
                 profit: amount_in.saturating_sub(initial_amount) as u64,
@@ -143,6 +189,7 @@ impl MevPath {
         let mut marginal_prices_acc = 1_f64;
         let mut optimal_input_denominator = 0_f64;
         let mut previous_ratio = 1_f64;
+        let mut total_fee_acc = 1_f64;
         for pair_info in &self.path {
             let tokens_state = pool_states.0.get(&pair_info.pool)?;
 
@@ -174,12 +221,13 @@ impl MevPath {
             };
 
             let total_fee = 1_f64 - (host_fee + owner_fee + trade_fee);
-
-            marginal_prices_acc *= token_balance_to / token_balance_from;
+            let ratio = token_balance_to / token_balance_from;
+            marginal_prices_acc *= ratio;
             marginal_prices_acc *= total_fee;
+            total_fee_acc *= total_fee;
 
-            optimal_input_denominator += total_fee * previous_ratio / token_balance_to;
-            previous_ratio = token_balance_to / token_balance_from;
+            optimal_input_denominator += total_fee_acc * (previous_ratio / token_balance_from);
+            previous_ratio = previous_ratio * ratio;
         }
         if marginal_prices_acc > 1_f64 {
             let optimal_input_numerator = marginal_prices_acc.sqrt() - 1_f64;
@@ -213,11 +261,10 @@ pub fn get_arbitrage_tx_outputs(
         .collect()
 }
 
-struct SwapArguments<'a> {
+struct SwapArguments {
     program_id: Pubkey,
     swap_pubkey: Pubkey,
     authority_pubkey: Pubkey,
-    user_transfer_authority: &'a Keypair,
     source_pubkey: Pubkey,
     swap_source_pubkey: Pubkey,
     swap_destination_pubkey: Pubkey,
@@ -227,41 +274,49 @@ struct SwapArguments<'a> {
     token_program: Pubkey,
     amount_in: u64,
     minimum_amount_out: u64,
-    blockhash: Hash,
 }
 
-fn create_swap_tx(swap_args: SwapArguments) -> SanitizedTransaction {
-    let data = SwapInstruction::Swap(Swap {
-        amount_in: swap_args.amount_in,
-        minimum_amount_out: swap_args.minimum_amount_out,
-    })
-    .pack();
+fn create_swap_tx(
+    swap_args_vec: Vec<SwapArguments>,
+    blockhash: Hash,
+    user_transfer_authority: &Keypair,
+) -> SanitizedTransaction {
+    let instructions: Vec<Instruction> = swap_args_vec
+        .iter()
+        .map(|swap_args| {
+            let data = SwapInstruction::Swap(Swap {
+                amount_in: swap_args.amount_in,
+                minimum_amount_out: swap_args.minimum_amount_out,
+            })
+            .pack();
 
-    let is_signer = false;
-    let accounts = vec![
-        AccountMeta::new_readonly(swap_args.swap_pubkey, is_signer),
-        AccountMeta::new_readonly(swap_args.authority_pubkey, is_signer),
-        AccountMeta::new_readonly(swap_args.user_transfer_authority.pubkey(), true),
-        AccountMeta::new(swap_args.source_pubkey, is_signer),
-        AccountMeta::new(swap_args.swap_source_pubkey, is_signer),
-        AccountMeta::new(swap_args.swap_destination_pubkey, is_signer),
-        AccountMeta::new(swap_args.destination_pubkey, is_signer),
-        AccountMeta::new(swap_args.pool_mint_pubkey, is_signer),
-        AccountMeta::new(swap_args.pool_fee_pubkey, is_signer),
-        AccountMeta::new_readonly(swap_args.token_program, is_signer),
-    ];
+            let is_signer = false;
+            let accounts = vec![
+                AccountMeta::new_readonly(swap_args.swap_pubkey, is_signer),
+                AccountMeta::new_readonly(swap_args.authority_pubkey, is_signer),
+                AccountMeta::new_readonly(user_transfer_authority.pubkey(), true),
+                AccountMeta::new(swap_args.source_pubkey, is_signer),
+                AccountMeta::new(swap_args.swap_source_pubkey, is_signer),
+                AccountMeta::new(swap_args.swap_destination_pubkey, is_signer),
+                AccountMeta::new(swap_args.destination_pubkey, is_signer),
+                AccountMeta::new(swap_args.pool_mint_pubkey, is_signer),
+                AccountMeta::new(swap_args.pool_fee_pubkey, is_signer),
+                AccountMeta::new_readonly(swap_args.token_program, is_signer),
+            ];
 
-    let swap_ix = Instruction {
-        program_id: swap_args.program_id,
-        accounts,
-        data,
-    };
+            Instruction {
+                program_id: swap_args.program_id,
+                accounts,
+                data,
+            }
+        })
+        .collect();
 
     let signed_tx = Transaction::new_signed_with_payer(
-        &[swap_ix],
-        Some(&swap_args.user_transfer_authority.pubkey()),
-        &[swap_args.user_transfer_authority],
-        swap_args.blockhash,
+        &instructions,
+        Some(&user_transfer_authority.pubkey()),
+        &[user_transfer_authority],
+        blockhash,
     );
 
     SanitizedTransaction::try_from_legacy_transaction(signed_tx)
