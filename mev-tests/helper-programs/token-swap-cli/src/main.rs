@@ -33,13 +33,13 @@ pub struct Opts {
 
 #[derive(Parser, Debug)]
 struct InitializeTokenSwap {
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value = "25")]
     trade_fee_numerator: u64,
-    #[clap(long, default_value = "100")]
+    #[clap(long, default_value = "10000")]
     trade_fee_denominator: u64,
-    #[clap(long, default_value = "0")]
+    #[clap(long, default_value = "5")]
     owner_trade_fee_numerator: u64,
-    #[clap(long, default_value = "100")]
+    #[clap(long, default_value = "10000")]
     owner_trade_fee_denominator: u64,
     #[clap(long, default_value = "0")]
     owner_withdraw_fee_numerator: u64,
