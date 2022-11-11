@@ -111,9 +111,9 @@ pub struct OrcaPoolAddresses {
 }
 
 impl OrcaPoolAddresses {
-    pub fn populate_pool_authority(&mut self) {
+    pub fn populate_pool_authority(&mut self, program_id: &Pubkey) {
         let (pool_authority, _authority_bump_seed) =
-            Pubkey::find_program_address(&[&self.address.to_bytes()[..]], &inline_spl_token::id());
+            Pubkey::find_program_address(&[&self.address.to_bytes()[..]], &program_id);
         self.pool_authority = pool_authority;
     }
 }
