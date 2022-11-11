@@ -51,57 +51,41 @@ def create_token_pool_with_liquidity(
     test_dir: str,
     pool_id: str,
     token_swap_program_id: str,
+    token_a_mint: TestAccount,
+    token_b_mint: TestAccount,
     token_a_liquidity: str,
     token_b_liquidity: str,
 ) -> TokenPool:
-    t0_mint_keypair = create_test_account(
-        f'{test_dir}/token-{pool_id}-token-0-mint.json', fund=False
-    )
-    spl_token(
-        'create-token',
-        f'{test_dir}/token-{pool_id}-token-0-mint.json',
-        '--decimals',
-        '6',
-    )
-    t0_token_mint_address = t0_mint_keypair.pubkey
-    print(f'> Token 0 from {pool_id} pool: ', t0_mint_keypair.pubkey)
-
-    t0_account = create_test_account(
+    t_a_account = create_test_account(
         f'{test_dir}/token-{pool_id}-token-0-account.json', fund=False
     )
     spl_token(
         'create-account',
-        t0_token_mint_address,
-        t0_account.keypair_path,
+        token_a_mint.pubkey,
+        t_a_account.keypair_path,
         '--output',
         'json',
     )
-    spl_token('mint', t0_mint_keypair.pubkey, token_a_liquidity, t0_account.pubkey)
+    spl_token('mint', token_a_mint.pubkey, token_a_liquidity, t_a_account.pubkey)
     print(f'> Minted ourselves {token_a_liquidity} of token 0 from {pool_id}.')
 
-    # creates token 1 and token account
-    t1_mint_keypair = create_test_account(f'{test_dir}/token1-mint.json', fund=False)
-    spl_token('create-token', f'{test_dir}/token1-mint.json', '--decimals', '6')
-    token1_mint_address = t1_mint_keypair.pubkey
-    print('> Token 1: ', t1_mint_keypair.pubkey)
-
-    t1_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
+    t_b_account = create_test_account(f'{test_dir}/token1-account.json', fund=False)
     spl_token(
         'create-account',
-        token1_mint_address,
-        t1_account.keypair_path,
+        token_b_mint.pubkey,
+        t_b_account.keypair_path,
         '--output',
         'json',
     )
-    spl_token('mint', t1_mint_keypair.pubkey, token_b_liquidity, t1_account.pubkey)
+    spl_token('mint', token_b_mint.pubkey, token_b_liquidity, t_b_account.pubkey)
     print(f'> Minted ourselves {token_b_liquidity} of token 1 from {pool_id}.')
 
     token_pool = deploy_token_pool(
         token_swap_program_id,
-        t0_account.pubkey,
-        t1_account.pubkey,
-        t0_mint_keypair.pubkey,
-        t1_mint_keypair.pubkey,
+        t_a_account.pubkey,
+        t_b_account.pubkey,
+        token_a_mint.pubkey,
+        token_b_mint.pubkey,
     )
 
     return token_pool
@@ -139,18 +123,49 @@ print('\nUploading Orca Token Swap program ...')
 token_swap_program_id = solana_program_deploy(deploy_path + '/orca_token_swap_v2.so')
 print(f'> Token swap program id is {token_swap_program_id}')
 
+token_mint_keypairs = []
+# Create tokens
+for i in range(3):
+    token_mint_keypairs.append(
+        create_test_account(f'{test_dir}/token-{i}-mint.json', fund=False)
+    )
+    spl_token(
+        'create-token',
+        f'{test_dir}/token-{i}-mint.json',
+        '--decimals',
+        '9',
+    )
+
 token_pool_p0 = create_token_pool_with_liquidity(
-    test_dir, 'P0', token_swap_program_id, '4.618233234', '6.400518033'
+    test_dir,
+    'P0',
+    token_swap_program_id,
+    token_mint_keypairs[0],
+    token_mint_keypairs[1],
+    '32500.951164566',
+    '1030.701091486',
 )
 print(f'> Token Pool created with address {token_pool_p0.token_swap_account}')
 
 token_pool_p1 = create_token_pool_with_liquidity(
-    test_dir, 'P1', token_swap_program_id, '54896.627850684', '13.408494240'
+    test_dir,
+    'P1',
+    token_swap_program_id,
+    token_mint_keypairs[0],
+    token_mint_keypairs[2],
+    '6761.724934325',
+    '15.245225568',
 )
 print(f'> Token Pool created with address {token_pool_p1.token_swap_account}')
 
 token_pool_p2 = create_token_pool_with_liquidity(
-    test_dir, 'P2', token_swap_program_id, '400.881658679', '138.436018345'
+    test_dir,
+    'P2',
+    token_swap_program_id,
+    token_mint_keypairs[2],
+    token_mint_keypairs[1],
+    '0.000453975',
+    '0.006517227',
 )
 print(f'> Token Pool created with address {token_pool_p2.token_swap_account}')
 
@@ -160,7 +175,7 @@ d_data = {
     'orca_program_id': token_swap_program_id,
     'orca_account': [
         {
-            '_id': 'P0',
+            '_id': 'P0: Token0, Token1',
             'address': token_pool_p0.token_swap_account,
             'pool_a_account': token_pool_p0.token_swap_a_account,
             'pool_b_account': token_pool_p0.token_swap_b_account,
@@ -168,7 +183,7 @@ d_data = {
             'pool_fee': token_pool_p0.pool_fee_account,
         },
         {
-            '_id': 'P1',
+            '_id': 'P1: Token0, Token2',
             'address': token_pool_p1.token_swap_account,
             'pool_a_account': token_pool_p1.token_swap_a_account,
             'pool_b_account': token_pool_p1.token_swap_b_account,
@@ -176,7 +191,7 @@ d_data = {
             'pool_fee': token_pool_p1.pool_fee_account,
         },
         {
-            '_id': 'P2',
+            '_id': 'Token2, Token1',
             'address': token_pool_p2.token_swap_account,
             'pool_a_account': token_pool_p2.token_swap_a_account,
             'pool_b_account': token_pool_p2.token_swap_b_account,
@@ -189,7 +204,7 @@ d_data = {
             'name': 'P0->P1->P2',
             'path': [
                 {'pool': token_pool_p0.token_swap_account, 'direction': 'BtoA'},
-                {'pool': token_pool_p1.token_swap_account, 'direction': 'BtoA'},
+                {'pool': token_pool_p1.token_swap_account, 'direction': 'AtoB'},
                 {'pool': token_pool_p2.token_swap_account, 'direction': 'AtoB'},
             ],
         }
