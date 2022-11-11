@@ -29,7 +29,7 @@ pub struct MevConfig {
 impl MevConfig {
     pub fn populate_orca_pools_authority(&mut self) {
         for orca_acc in self.orca_accounts.0.iter_mut() {
-            orca_acc.populate_pool_authority();
+            orca_acc.populate_pool_authority(&self.orca_program_id);
         }
     }
 }
