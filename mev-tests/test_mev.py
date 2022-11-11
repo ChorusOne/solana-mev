@@ -123,17 +123,32 @@ print('\nUploading Orca Token Swap program ...')
 token_swap_program_id = solana_program_deploy(deploy_path + '/orca_token_swap_v2.so')
 print(f'> Token swap program id is {token_swap_program_id}')
 
+
+miner_authority_key = create_test_account(f'{test_dir}/miner_authority.json', fund=True)
 token_mint_keypairs = []
+pool_tokens = []
 # Create tokens
 for i in range(3):
-    token_mint_keypairs.append(
-        create_test_account(f'{test_dir}/token-{i}-mint.json', fund=False)
-    )
+    token_mint = create_test_account(f'{test_dir}/token-{i}-mint.json', fund=False)
+    token_mint_keypairs.append(token_mint)
     spl_token(
         'create-token',
         f'{test_dir}/token-{i}-mint.json',
         '--decimals',
         '9',
+    )
+    token_account = create_test_account(
+        f'{test_dir}/miner-token-account-{i}.json', fund=False
+    )
+    pool_tokens.append(token_account.pubkey)
+    spl_token(
+        'create-account',
+        token_mint.pubkey,
+        token_account.keypair_path,
+        '--owner',
+        miner_authority_key.pubkey,
+        '--output',
+        'json',
     )
 
 token_pool_p0 = create_token_pool_with_liquidity(
@@ -173,6 +188,7 @@ print(f'> Token Pool created with address {token_pool_p2.token_swap_account}')
 d_data = {
     'log_path': '/tmp/mev.log',
     'orca_program_id': token_swap_program_id,
+    'user_authority_path': miner_authority_key.keypair_path,
     'orca_account': [
         {
             '_id': 'P0: Token0, Token1',
@@ -181,6 +197,8 @@ d_data = {
             'pool_b_account': token_pool_p0.token_swap_b_account,
             'pool_mint': token_pool_p0.pool_mint_account,
             'pool_fee': token_pool_p0.pool_fee_account,
+            'source': pool_tokens[0],
+            'destination': pool_tokens[1],
         },
         {
             '_id': 'P1: Token0, Token2',
@@ -189,6 +207,8 @@ d_data = {
             'pool_b_account': token_pool_p1.token_swap_b_account,
             'pool_mint': token_pool_p1.pool_mint_account,
             'pool_fee': token_pool_p1.pool_fee_account,
+            'source': pool_tokens[0],
+            'destination': pool_tokens[2],
         },
         {
             '_id': 'Token2, Token1',
@@ -197,6 +217,8 @@ d_data = {
             'pool_b_account': token_pool_p2.token_swap_b_account,
             'pool_mint': token_pool_p2.pool_mint_account,
             'pool_fee': token_pool_p2.pool_fee_account,
+            'source': pool_tokens[2],
+            'destination': pool_tokens[1],
         },
     ],
     'mev_path': [
@@ -210,6 +232,14 @@ d_data = {
         }
     ],
 }
+# Mint T1 Token to ourselves so we can extract MEV:
+
+spl_token('mint', token_mint_keypairs[1].pubkey, '1.0', pool_tokens[1])
+initial_balance = float(spl_token('balance', '--address', pool_tokens[1]))
+print(
+    f'  Minted ourselves {initial_balance} token {token_mint_keypairs[1].pubkey}\
+into {pool_tokens[1]} so we can extract opportunities'
+)
 
 with open(config_file, 'w+') as f:
     toml.dump(d_data, f)
@@ -252,7 +282,7 @@ assert mev_logs[len(mev_logs) - 1] == {
                     },
                     {
                         'pool': token_pool_p1.token_swap_account,
-                        'direction': 'BtoA',
+                        'direction': 'AtoB',
                     },
                     {
                         'pool': token_pool_p2.token_swap_account,
@@ -260,10 +290,17 @@ assert mev_logs[len(mev_logs) - 1] == {
                     },
                 ],
             },
-            'input': 1038789.8258295291,
+            'input_output_pairs': [
+                {'token_in': 36868, 'token_out': 1159084},
+                {'token_in': 1159084, 'token_out': 2605},
+                {'token_in': 2605, 'token_out': 37084},
+            ],
         }
     ],
 }
+post_balance = float(spl_token('balance', '--address', pool_tokens[1]))
+assert int(post_balance * 1e9) - int(initial_balance * 1e9) == 216
+
 
 print('> Compiling the BPF program to swap with an inner program')
 compile_bpf_program(
@@ -288,6 +325,6 @@ tx_hash = token_pool_p0.inner_swap(
 
 # check log is working for swaps
 mev_logs = read_mev_log('/tmp/mev.log')
-assert mev_logs[len(mev_logs) - 2]['transaction_hash'] == tx_hash
+assert mev_logs[len(mev_logs) - 1]['transaction_hash'] == tx_hash
 
 test_validator.terminate()
