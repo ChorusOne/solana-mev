@@ -4235,6 +4235,8 @@ impl Bank {
                                 *tx.message().recent_blockhash(),
                             )
                         {
+                            // We assume all paths begin and end at the same token.
+                            // TODO(81): Assert this is done by construction.
                             if !matches!(mev_sanitized_tx_profit, Some(ref tx_profit) if tx_profit.1 >= profit)
                             {
                                 mev_sanitized_tx_profit.replace((sanitized_txs, profit));
