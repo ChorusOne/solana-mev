@@ -339,9 +339,6 @@ impl Accounts {
     }
 
     /// Load a transaction from DB.
-    /// When `mev_loaded_tx_overrides` is present, looks for MEV accounts so we
-    /// can reference already loaded accounts, avoiding to load them again, we
-    /// cannot modify the same account within the same batch of transactions.
     pub fn load_transaction(
         &self,
         ancestors: &Ancestors,
@@ -351,24 +348,7 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        mev_loaded_tx: Option<&LoadedTransaction>,
     ) -> Result<LoadedTransaction> {
-        let get_acc_from_mev = |key| -> Option<(AccountSharedData, Slot)> {
-            if let Some(loaded_tx) = mev_loaded_tx {
-                let mev_acc_or_idx = loaded_tx
-                    .mev_accounts
-                    .as_ref()?
-                    .pubkey_account_map
-                    .get(key)?;
-                Some(match mev_acc_or_idx {
-                    MevAccountOrIdx::Idx(idx) => (loaded_tx.accounts[*idx].1.clone(), 0),
-                    MevAccountOrIdx::ReadAccount(acc) => (acc.1.clone(), 0),
-                })
-            } else {
-                None
-            }
-        };
-
         let load_zero_lamports =
             if feature_set.is_active(&return_none_for_zero_lamport_accounts::id()) {
                 LoadZeroLamports::None
@@ -411,9 +391,11 @@ impl Accounts {
                         {
                             (account_override.clone(), 0)
                         } else {
-                            let tx_acc = get_acc_from_mev(key).or(self
-                                .accounts_db
-                                .load_with_fixed_root(ancestors, key, load_zero_lamports));
+                            let tx_acc = self.accounts_db.load_with_fixed_root(
+                                ancestors,
+                                key,
+                                load_zero_lamports,
+                            );
 
                             tx_acc
                                 .map(|(mut account, _)| {
@@ -719,7 +701,6 @@ impl Accounts {
                         rent_collector,
                         feature_set,
                         account_overrides,
-                        None,
                     ) {
                         Ok(loaded_transaction) => loaded_transaction,
                         Err(e) => return (Err(e), None),
