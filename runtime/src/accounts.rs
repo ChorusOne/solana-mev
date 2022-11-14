@@ -128,7 +128,6 @@ pub enum MevAccountOrIdx {
     /// writable.
     Idx(usize),
     ReadAccount(TransactionAccount),
-    WriteAccount(TransactionAccount),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -163,7 +162,7 @@ impl MevAccounts {
         load_zero_lamports: LoadZeroLamports,
     ) -> Self {
         let mut pubkey_account_map = HashMap::new();
-        let mut insert_account_in_map = |pubkey: &Pubkey, is_writable: bool| {
+        let mut insert_account_in_map = |pubkey: &Pubkey| {
             let acc = writable_accounts_map
                 .get(pubkey)
                 .map(|idx| MevAccountOrIdx::Idx(*idx))
@@ -171,33 +170,27 @@ impl MevAccounts {
                     let (account, _slot) = accounts_db
                         .load_with_fixed_root(ancestors, pubkey, load_zero_lamports)
                         .unwrap_or_default();
-                    if is_writable {
-                        MevAccountOrIdx::WriteAccount((*pubkey, account))
-                    } else {
-                        MevAccountOrIdx::ReadAccount((*pubkey, account))
-                    }
+                    MevAccountOrIdx::ReadAccount((*pubkey, account))
                 });
             pubkey_account_map.insert(*pubkey, acc);
         };
 
         let mut pool_accounts = Vec::with_capacity(mev_keys.pool_keys.len());
         for pool_keys in &mev_keys.pool_keys {
-            let is_writable = pool_keys.source.is_some() && pool_keys.destination.is_some();
-
-            insert_account_in_map(&pool_keys.pool, false);
-            insert_account_in_map(&pool_keys.token_a, is_writable);
-            insert_account_in_map(&pool_keys.token_b, is_writable);
-            insert_account_in_map(&pool_keys.pool_mint, is_writable);
-            insert_account_in_map(&pool_keys.pool_fee, is_writable);
-            insert_account_in_map(&pool_keys.pool_authority, false);
+            insert_account_in_map(&pool_keys.pool);
+            insert_account_in_map(&pool_keys.token_a);
+            insert_account_in_map(&pool_keys.token_b);
+            insert_account_in_map(&pool_keys.pool_mint);
+            insert_account_in_map(&pool_keys.pool_fee);
+            insert_account_in_map(&pool_keys.pool_authority);
 
             let source = pool_keys.source.map(|src| {
-                insert_account_in_map(&src, is_writable);
+                insert_account_in_map(&src);
                 src
             });
 
             let destination = pool_keys.destination.map(|dst| {
-                insert_account_in_map(&dst, is_writable);
+                insert_account_in_map(&dst);
                 dst
             });
 
@@ -212,13 +205,13 @@ impl MevAccounts {
                 pool_authority: pool_keys.pool_authority,
             });
         }
-        insert_account_in_map(&mev_keys.token_program, false);
+        insert_account_in_map(&mev_keys.token_program);
 
         MevAccounts {
             pool_accounts,
             token_program: mev_keys.token_program,
             user_authority: mev_keys.user_authority.map(|user_authority| {
-                insert_account_in_map(&user_authority, false);
+                insert_account_in_map(&user_authority);
                 user_authority
             }),
             pubkey_account_map,
@@ -345,6 +338,10 @@ impl Accounts {
         })
     }
 
+    /// Load a transaction from DB.
+    /// When `mev_loaded_tx_overrides` is present, looks for MEV accounts so we
+    /// can reference already loaded accounts, avoiding to load them again, we
+    /// cannot modify the same account within the same batch of transactions.
     pub fn load_transaction(
         &self,
         ancestors: &Ancestors,
@@ -354,10 +351,10 @@ impl Accounts {
         rent_collector: &RentCollector,
         feature_set: &FeatureSet,
         account_overrides: Option<&AccountOverrides>,
-        loaded_tx: Option<&LoadedTransaction>,
+        mev_loaded_tx: Option<&LoadedTransaction>,
     ) -> Result<LoadedTransaction> {
         let get_acc_from_mev = |key| -> Option<(AccountSharedData, Slot)> {
-            if let Some(loaded_tx) = loaded_tx {
+            if let Some(loaded_tx) = mev_loaded_tx {
                 let mev_acc_or_idx = loaded_tx
                     .mev_accounts
                     .as_ref()?
@@ -365,9 +362,7 @@ impl Accounts {
                     .get(key)?;
                 Some(match mev_acc_or_idx {
                     MevAccountOrIdx::Idx(idx) => (loaded_tx.accounts[*idx].1.clone(), 0),
-                    MevAccountOrIdx::ReadAccount(acc) | MevAccountOrIdx::WriteAccount(acc) => {
-                        (acc.1.clone(), 0)
-                    }
+                    MevAccountOrIdx::ReadAccount(acc) => (acc.1.clone(), 0),
                 })
             } else {
                 None
