@@ -29,7 +29,7 @@ use spl_token_swap::{curve::calculator::CurveCalculator, state::SwapVersion};
 
 use crate::{
     accounts::LoadedTransaction,
-    accounts::MevAccountOrIdx::{Idx, ReadAccount, WriteAccount},
+    accounts::MevAccountOrIdx::{Idx, ReadAccount},
     inline_spl_token,
     mev::utils::{deserialize_b58, serialize_b58},
 };
@@ -267,7 +267,7 @@ impl Mev {
                         let get_account =
                             |pubkey: &'a Pubkey| match &mev_accounts.pubkey_account_map[pubkey] {
                                 Idx(idx) => &loaded_transaction.accounts[*idx],
-                                ReadAccount(acc) | WriteAccount(acc) => &acc,
+                                ReadAccount(acc) => &acc,
                             };
                         let pool_acc = get_account(&mev_account.pool);
                         let pool = SwapVersion::unpack(pool_acc.1.data())?;
