@@ -326,7 +326,8 @@ impl Mev {
 
     /// Log the pool state after a transaction interacted with one or more
     /// account from the pool
-    /// Returns the most profitable MEV tx.
+    /// Returns a tuple with the most profitable MEV tx and the profit in the
+    /// token's unit.
     pub fn log_mev_opportunities_get_max_profit_tx(
         &self,
         tx: &SanitizedTransaction,
