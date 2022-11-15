@@ -391,13 +391,8 @@ impl Accounts {
                         {
                             (account_override.clone(), 0)
                         } else {
-                            let tx_acc = self.accounts_db.load_with_fixed_root(
-                                ancestors,
-                                key,
-                                load_zero_lamports,
-                            );
-
-                            tx_acc
+                            self.accounts_db
+                                .load_with_fixed_root(ancestors, key, load_zero_lamports)
                                 .map(|(mut account, _)| {
                                     if message.is_writable(i) {
                                         let rent_due = rent_collector
