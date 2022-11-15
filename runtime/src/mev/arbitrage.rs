@@ -73,7 +73,7 @@ impl MevPath {
         blockhash: Hash,
         path_idx: usize,
     ) -> Option<MevTxOutput> {
-        let initial_amount = self.does_arbitrage_opportunity_exist(pool_states)?.floor() as u128;
+        let initial_amount = self.get_input_amount(pool_states)?.floor() as u128;
         let mut amount_in = initial_amount;
         let mut input_output_pairs = Vec::with_capacity(self.path.len());
 
@@ -185,7 +185,7 @@ impl MevPath {
         }
     }
 
-    fn does_arbitrage_opportunity_exist(&self, pool_states: &PoolStates) -> Option<f64> {
+    fn get_input_amount(&self, pool_states: &PoolStates) -> Option<f64> {
         let mut marginal_prices_acc = 1_f64;
         let mut optimal_input_denominator = 0_f64;
         let mut previous_ratio = 1_f64;
