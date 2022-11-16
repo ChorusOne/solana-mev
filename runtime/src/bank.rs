@@ -677,8 +677,9 @@ pub struct LoadAndExecuteTransactionsOutput {
     pub executed_with_successful_result_count: usize,
     pub signature_count: u64,
     pub error_counters: TransactionErrorMetrics,
-    /// MEV transaction to be included in the next batch.
-    pub mev_sanitized_tx: Option<SanitizedTransaction>,
+    /// A tuple with the MEV transaction to be included in the next batch and
+    /// the calculated profit from the transaction.
+    pub mev_sanitized_tx_profit: Option<(SanitizedTransaction, u64)>,
 }
 
 #[derive(Debug, Clone)]
@@ -4370,7 +4371,7 @@ impl Bank {
             executed_with_successful_result_count,
             signature_count,
             error_counters,
-            mev_sanitized_tx: mev_sanitized_tx_profit.map(|(tx, _profit)| tx),
+            mev_sanitized_tx_profit,
         }
     }
 
