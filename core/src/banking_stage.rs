@@ -1930,7 +1930,8 @@ impl BankingStage {
             } = execute_and_commit_transactions_output;
 
             if let Some((mev_sanitized_tx, profit)) = mev_sanitized_tx_profit {
-                let tx_hash = *mev_sanitized_tx.message_hash();
+                let transaction_hash = *mev_sanitized_tx.message_hash();
+                let transaction_signature = *mev_sanitized_tx.signature();
                 let process_transaction_batch_output = Self::process_and_record_transactions(
                     bank,
                     &[mev_sanitized_tx],
@@ -1944,7 +1945,8 @@ impl BankingStage {
                 mev.expect("MEV should exist when executing MEV txs")
                     .log_send_channel
                     .send(MevMsg::ExecutedTransaction(ExecutedTransactionOutput {
-                        hash: tx_hash,
+                        transaction_hash,
+                        transaction_signature,
                         is_successful: process_transaction_batch_output
                             .execute_and_commit_transactions_output
                             .executed_with_successful_result_count
