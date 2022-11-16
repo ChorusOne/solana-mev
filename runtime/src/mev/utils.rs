@@ -130,7 +130,7 @@ mod tests {
                     .unwrap()
                     .to_bytes()[..],
             ],
-            &inline_spl_token::id(),
+            &sample_config.orca_program_id,
         );
         let (authority_sol_usdc, _authority_bump_seed) = Pubkey::find_program_address(
             &[
@@ -138,7 +138,7 @@ mod tests {
                     .unwrap()
                     .to_bytes()[..],
             ],
-            &inline_spl_token::id(),
+            &sample_config.orca_program_id,
         );
 
         let expected_mev_config = MevConfig {

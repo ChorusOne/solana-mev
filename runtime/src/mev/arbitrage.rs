@@ -62,6 +62,8 @@ pub struct MevTxOutput {
     pub path_idx: usize,
     pub input_output_pairs: Vec<InputOutputPairs>,
     pub profit: u64,
+    // Marginal price when calculating the path's input.
+    pub marginal_price: f64,
 }
 
 impl MevPath {
@@ -73,92 +75,91 @@ impl MevPath {
         blockhash: Hash,
         path_idx: usize,
     ) -> Option<MevTxOutput> {
-        let initial_amount = self.get_input_amount(pool_states)?.floor() as u128;
+        let (initial_amount, marginal_price) = self.get_input_amount_marginal_price(pool_states)?;
+        let initial_amount = initial_amount.floor() as u128;
         let mut amount_in = initial_amount;
         let mut input_output_pairs = Vec::with_capacity(self.path.len());
 
-        let swap_arguments_vec = self
-            .path
-            .iter()
-            .map(|pair_info| {
-                let pool_state = pool_states.0.get(&pair_info.pool)?;
+        let mut swap_arguments_vec = Vec::with_capacity(self.path.len());
+        for pair_info in &self.path {
+            let pool_state = pool_states.0.get(&pair_info.pool)?;
 
-                let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
-                let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
+            let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
+            let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
 
-                let total_fees = trade_fee.checked_add(owner_fee)?;
-                let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
+            let total_fees = trade_fee.checked_add(owner_fee)?;
+            let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
 
-                let (
-                    trade_direction,
-                    source_pubkey,
+            let (
+                trade_direction,
+                source_pubkey,
+                swap_source_pubkey,
+                destination_pubkey,
+                swap_destination_pubkey,
+                swap_source_amount,
+                swap_destination_amount,
+            ) = match pair_info.direction {
+                TradeDirection::AtoB => (
+                    spl_token_swap::curve::calculator::TradeDirection::AtoB,
+                    pool_state.pool.source,
+                    pool_state.pool.pool_a_account,
+                    pool_state.pool.destination,
+                    pool_state.pool.pool_b_account,
+                    pool_state.pool_a_balance,
+                    pool_state.pool_b_balance,
+                ),
+                TradeDirection::BtoA => (
+                    spl_token_swap::curve::calculator::TradeDirection::BtoA,
+                    pool_state.pool.destination,
+                    pool_state.pool.pool_b_account,
+                    pool_state.pool.source,
+                    pool_state.pool.pool_a_account,
+                    pool_state.pool_b_balance,
+                    pool_state.pool_a_balance,
+                ),
+            };
+
+            // For the Constant Product Curve the `trade_direction` is
+            // ignored and it's our responsibility to provide the right
+            // token's balance from the pool.
+            let SwapWithoutFeesResult {
+                source_amount_swapped: _,
+                destination_amount_swapped,
+            } = pool_state.curve_calculator.swap_without_fees(
+                source_amount_less_fees,
+                swap_source_amount as u128,
+                swap_destination_amount as u128,
+                // Again, this argument is useless!
+                trade_direction,
+            )?;
+
+            input_output_pairs.push(InputOutputPairs {
+                token_in: amount_in as u64,
+                token_out: destination_amount_swapped as u64,
+            });
+
+            let swap_arguments = match (source_pubkey, destination_pubkey) {
+                (Some(source), Some(destination)) => Some(SwapArguments {
+                    program_id,
+                    swap_pubkey: pair_info.pool,
+                    authority_pubkey: pool_state.pool.pool_authority,
+                    source_pubkey: source,
                     swap_source_pubkey,
-                    destination_pubkey,
                     swap_destination_pubkey,
-                    swap_source_amount,
-                    swap_destination_amount,
-                ) = match pair_info.direction {
-                    TradeDirection::AtoB => (
-                        spl_token_swap::curve::calculator::TradeDirection::AtoB,
-                        pool_state.pool.source,
-                        pool_state.pool.pool_a_account,
-                        pool_state.pool.destination,
-                        pool_state.pool.pool_b_account,
-                        pool_state.pool_a_balance,
-                        pool_state.pool_b_balance,
-                    ),
-                    TradeDirection::BtoA => (
-                        spl_token_swap::curve::calculator::TradeDirection::BtoA,
-                        pool_state.pool.destination,
-                        pool_state.pool.pool_b_account,
-                        pool_state.pool.source,
-                        pool_state.pool.pool_a_account,
-                        pool_state.pool_b_balance,
-                        pool_state.pool_a_balance,
-                    ),
-                };
+                    destination_pubkey: destination,
+                    pool_mint_pubkey: pool_state.pool.pool_mint,
+                    pool_fee_pubkey: pool_state.pool.pool_fee,
+                    token_program: inline_spl_token::id(),
+                    amount_in: amount_in as u64,
+                    minimum_amount_out: 0,
+                }),
+                _ => None,
+            };
 
-                // For the Constant Product Curve the `trade_direction` is
-                // ignored and it's our responsibility to provide the right
-                // token's balance from the pool.
-                let SwapWithoutFeesResult {
-                    source_amount_swapped: _,
-                    destination_amount_swapped,
-                } = pool_state.curve_calculator.swap_without_fees(
-                    source_amount_less_fees,
-                    swap_source_amount as u128,
-                    swap_destination_amount as u128,
-                    // Again, this argument is useless!
-                    trade_direction,
-                )?;
+            amount_in = destination_amount_swapped;
+            swap_arguments_vec.push(swap_arguments);
+        }
 
-                input_output_pairs.push(InputOutputPairs {
-                    token_in: amount_in as u64,
-                    token_out: destination_amount_swapped as u64,
-                });
-
-                let swap_arguments = match (source_pubkey, destination_pubkey) {
-                    (Some(source), Some(destination)) => Some(SwapArguments {
-                        program_id,
-                        swap_pubkey: pair_info.pool,
-                        authority_pubkey: pool_state.pool.pool_authority,
-                        source_pubkey: source,
-                        swap_source_pubkey,
-                        swap_destination_pubkey,
-                        destination_pubkey: destination,
-                        pool_mint_pubkey: pool_state.pool.pool_mint,
-                        pool_fee_pubkey: pool_state.pool.pool_fee,
-                        token_program: inline_spl_token::id(),
-                        amount_in: amount_in as u64,
-                        minimum_amount_out: 0,
-                    }),
-                    _ => None,
-                };
-
-                amount_in = destination_amount_swapped;
-                swap_arguments
-            })
-            .collect::<Vec<Option<_>>>();
         if amount_in <= initial_amount {
             // If the the `amount_in` is less than the initial amount, return
             // `None`.
@@ -181,11 +182,15 @@ impl MevPath {
                 path_idx,
                 input_output_pairs,
                 profit: amount_in.saturating_sub(initial_amount) as u64,
+                marginal_price,
             })
         }
     }
 
-    fn get_input_amount(&self, pool_states: &PoolStates) -> Option<f64> {
+    /// Get (`input`, `marginal_price`), `input` is the input of the first hop
+    /// of the path, and `marginal_price` is the multiplication of all fees and
+    /// ratios from the path.
+    fn get_input_amount_marginal_price(&self, pool_states: &PoolStates) -> Option<(f64, f64)> {
         let mut marginal_prices_acc = 1_f64;
         let mut optimal_input_denominator = 0_f64;
         let mut previous_ratio = 1_f64;
@@ -232,7 +237,7 @@ impl MevPath {
         if marginal_prices_acc > 1_f64 {
             let optimal_input_numerator = marginal_prices_acc.sqrt() - 1_f64;
             let optimal_input = optimal_input_numerator / optimal_input_denominator;
-            Some(optimal_input)
+            Some((optimal_input, marginal_prices_acc))
         } else {
             None
         }
@@ -325,7 +330,7 @@ fn create_swap_tx(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{str::FromStr, sync::Arc};
 
     use spl_token_swap::curve::constant_product::ConstantProductCurve;
 
@@ -454,11 +459,37 @@ mod tests {
                 },
             ],
         };
-        let arb_idxs = get_arbitrage_idxs(&[path.clone()], &pool_states);
-        assert_eq!(arb_idxs, vec![(0, 1036845732.6985222)]);
+        let arbs = get_arbitrage_tx_outputs(
+            &[path.clone()],
+            &pool_states,
+            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
+            None,
+            Hash::new_unique(),
+        );
+        assert_eq!(arbs[0].path_idx, 0);
+        assert_eq!(
+            arbs[0].input_output_pairs,
+            vec![
+                InputOutputPairs {
+                    token_in: 4099483579,
+                    token_out: 1799781506
+                },
+                InputOutputPairs {
+                    token_in: 1799781506,
+                    token_out: 6479400819484
+                },
+                InputOutputPairs {
+                    token_in: 6479400819484,
+                    token_out: 130347150790
+                }
+            ]
+        );
+        assert_eq!(arbs[0].marginal_price, 1010.9851646730779);
+        assert_eq!(arbs[0].profit, 126247667211);
 
-        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
-        assert_eq!(has_arbitrage, Some(1036845732.6985222));
+        let (input, marginal_price) = path.get_input_amount_marginal_price(&pool_states).unwrap();
+        assert_eq!(marginal_price, 1010.9851646730779);
+        assert_eq!(input, 4099483579.109189);
 
         pool_states
             .0
@@ -491,15 +522,20 @@ mod tests {
             .unwrap()
             .pool_a_balance = 1384360183450;
 
-        let has_arbitrage = path.does_arbitrage_opportunity_exist(&pool_states);
-        assert_eq!(has_arbitrage, None);
-        let arb_idxs = get_arbitrage_idxs(&[path], &pool_states);
-        assert_eq!(arb_idxs, vec![]);
+        let input_marginal_price_opt = path.get_input_amount_marginal_price(&pool_states);
+        assert_eq!(input_marginal_price_opt, None);
+        let arbs = get_arbitrage_tx_outputs(
+            &[path],
+            &pool_states,
+            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
+            None,
+            Hash::new_unique(),
+        );
+        assert!(arbs.is_empty());
     }
 
     #[test]
     fn test_serialize() {
-        let curve_calculator = Arc::new(ConstantProductCurve::default());
         let path = MevPath {
             name: "SOL->USDC->wstETH->stSOL->stSOL->USDC->SOL".to_owned(),
             path: vec![
@@ -578,8 +614,14 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let arbs = get_arbitrage_idxs(&vec![], &pool_states);
-        assert_eq!(arbs, vec![]);
+        let arbs = get_arbitrage_tx_outputs(
+            &vec![],
+            &pool_states,
+            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
+            None,
+            Hash::new_unique(),
+        );
+        assert!(arbs.is_empty());
     }
 
     #[test]
@@ -714,7 +756,32 @@ mod tests {
                 }],
             },
         ];
-        let arb_idxs = get_arbitrage_idxs(&paths, &pool_states);
-        assert_eq!(arb_idxs, vec![(0, 1036845732.6985222)]);
+        let arbs = get_arbitrage_tx_outputs(
+            &paths,
+            &pool_states,
+            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
+            None,
+            Hash::new_unique(),
+        );
+        assert_eq!(arbs[0].path_idx, 0);
+        assert_eq!(
+            arbs[0].input_output_pairs,
+            vec![
+                InputOutputPairs {
+                    token_in: 4099483579,
+                    token_out: 1799781506
+                },
+                InputOutputPairs {
+                    token_in: 1799781506,
+                    token_out: 6479400819484
+                },
+                InputOutputPairs {
+                    token_in: 6479400819484,
+                    token_out: 130347150790
+                }
+            ]
+        );
+        assert_eq!(arbs[0].marginal_price, 1010.9851646730779);
+        assert_eq!(arbs[0].profit, 126247667211);
     }
 }
