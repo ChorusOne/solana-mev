@@ -182,7 +182,15 @@ impl Serialize for PoolStates {
 pub enum MevMsg {
     Log(PrePostPoolStates),
     Opportunities(Vec<MevTxOutput>),
+    ExecutedTransaction(ExecutedTransactionOutput),
     Exit,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ExecutedTransactionOutput {
+    pub hash: Hash,
+    pub is_successful: bool,
+    pub possible_profit: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -408,6 +416,14 @@ impl MevLog {
                     )
                     .expect("[MEV] Could not write log opportunity to file")
                 }
+
+                Ok(MevMsg::ExecutedTransaction(executed_tx_output)) => writeln!(
+                    file,
+                    "{{\"event\":\"executed_transaction\",\"data\":{}}}",
+                    serde_json::to_string(&executed_tx_output)
+                        .expect("Constructed by us, should never fail")
+                )
+                .expect("[MEV] Could not write log executed transaction to file"),
 
                 Ok(MevMsg::Exit) => break,
                 Err(err) => error!("[MEV] Could not log arbitrage on file, error: {}", err),

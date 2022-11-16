@@ -2,7 +2,7 @@
 //! to construct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use solana_runtime::mev::Mev;
+use solana_runtime::mev::{ExecutedTransactionOutput, Mev, MevMsg};
 use {
     crate::{
         forward_packet_batches_by_accounts::ForwardPacketBatchesByAccounts,
@@ -141,7 +141,7 @@ pub struct ExecuteAndCommitTransactionsOutput {
     execute_and_commit_timings: LeaderExecuteAndCommitTimings,
     error_counters: TransactionErrorMetrics,
 
-    mev_sanitized_tx: Option<SanitizedTransaction>,
+    mev_sanitized_tx_profit: Option<(SanitizedTransaction, u64)>,
 }
 
 #[derive(Debug, Default)]
@@ -1444,7 +1444,7 @@ impl BankingStage {
             executed_with_successful_result_count,
             signature_count,
             error_counters,
-            mev_sanitized_tx,
+            mev_sanitized_tx_profit,
             ..
         } = load_and_execute_transactions_output;
 
@@ -1503,7 +1503,7 @@ impl BankingStage {
                 commit_transactions_result: Err(recorder_err),
                 execute_and_commit_timings,
                 error_counters,
-                mev_sanitized_tx,
+                mev_sanitized_tx_profit,
             };
         }
 
@@ -1626,7 +1626,7 @@ impl BankingStage {
             commit_transactions_result: Ok(commit_transaction_statuses),
             execute_and_commit_timings,
             error_counters,
-            mev_sanitized_tx,
+            mev_sanitized_tx_profit,
         }
     }
 
@@ -1888,11 +1888,12 @@ impl BankingStage {
                 commit_transactions_result: new_commit_transactions_result,
                 execute_and_commit_timings: new_execute_and_commit_timings,
                 error_counters: new_error_counters,
-                mev_sanitized_tx,
+                mev_sanitized_tx_profit,
                 ..
             } = execute_and_commit_transactions_output;
 
-            if let Some(mev_sanitized_tx) = mev_sanitized_tx {
+            if let Some((mev_sanitized_tx, profit)) = mev_sanitized_tx_profit {
+                let tx_hash = *mev_sanitized_tx.message_hash();
                 let process_transaction_batch_output = Self::process_and_record_transactions(
                     bank,
                     &[mev_sanitized_tx],
@@ -1904,6 +1905,17 @@ impl BankingStage {
                     log_messages_bytes_limit,
                     mev,
                 );
+                mev.expect("MEV should exist when executing MEV txs")
+                    .log_send_channel
+                    .send(MevMsg::ExecutedTransaction(ExecutedTransactionOutput {
+                        hash: tx_hash,
+                        is_successful: process_transaction_batch_output
+                            .execute_and_commit_transactions_output
+                            .executed_with_successful_result_count
+                            == 1,
+                        possible_profit: profit,
+                    }))
+                    .expect("Failed ExecutedTransaction message")
             }
 
             total_execute_and_commit_timings.accumulate(&new_execute_and_commit_timings);
