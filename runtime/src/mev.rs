@@ -188,6 +188,7 @@ pub enum MevMsg {
 
 #[derive(Debug, Serialize)]
 pub struct ExecutedTransactionOutput {
+    #[serde(serialize_with = "serialize_b58")]
     pub hash: Hash,
     pub is_successful: bool,
     pub possible_profit: u64,
