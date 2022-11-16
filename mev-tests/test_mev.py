@@ -267,9 +267,9 @@ tx_hash = token_pool_p0.swap(
 
 # check log is working for swaps
 mev_logs = read_mev_log('/tmp/mev.log')
-assert mev_logs[len(mev_logs) - 2]['transaction_hash'] == tx_hash
+assert mev_logs[len(mev_logs) - 3]['transaction_hash'] == tx_hash
 
-assert mev_logs[len(mev_logs) - 1] == {
+assert mev_logs[len(mev_logs) - 2] == {
     'event': 'opportunity',
     'data': [
         {
@@ -298,6 +298,10 @@ assert mev_logs[len(mev_logs) - 1] == {
         }
     ],
 }
+
+assert mev_logs[len(mev_logs) - 1]['data']['is_successful'] == True
+assert mev_logs[len(mev_logs) - 1]['data']['possible_profit'] == 216
+
 post_balance = float(spl_token('balance', '--address', pool_tokens[1]))
 assert int(post_balance * 1e9) - int(initial_balance * 1e9) == 216
 
