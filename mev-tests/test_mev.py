@@ -187,7 +187,7 @@ print(f'> Token Pool created with address {token_pool_p2.token_swap_account}')
 ## create toml file
 d_data = {
     'log_path': '/tmp/mev.log',
-    'orca_program_id': token_swap_program_id,
+    'watched_programs': [token_swap_program_id],
     'user_authority_path': miner_authority_key.keypair_path,
     'orca_account': [
         {
@@ -238,7 +238,7 @@ spl_token('mint', token_mint_keypairs[1].pubkey, '1.0', pool_tokens[1])
 initial_balance = float(spl_token('balance', '--address', pool_tokens[1]))
 print(
     f'  Minted ourselves {initial_balance} token {token_mint_keypairs[1].pubkey}\
-into {pool_tokens[1]} so we can extract opportunities'
+ into {pool_tokens[1]} so we can extract opportunities'
 )
 
 with open(config_file, 'w+') as f:
