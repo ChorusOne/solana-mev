@@ -69,7 +69,6 @@ pub struct MevTxOutput {
 impl MevPath {
     fn get_mev_txs(
         &self,
-        program_id: Pubkey,
         pool_states: &PoolStates,
         user_transfer_authority: Option<&Keypair>,
         blockhash: Hash,
@@ -140,7 +139,7 @@ impl MevPath {
 
             let swap_arguments = match (source_pubkey, destination_pubkey) {
                 (Some(source), Some(destination)) => Some(SwapArguments {
-                    program_id,
+                    program_id: pool_state.pool.program_id,
                     swap_pubkey: pair_info.pool,
                     authority_pubkey: pool_state.pool.pool_authority,
                     source_pubkey: source,
@@ -247,7 +246,6 @@ impl MevPath {
 pub fn get_arbitrage_tx_outputs(
     mev_paths: &[MevPath],
     pool_states: &PoolStates,
-    program_id: Pubkey,
     user_transfer_authority: Option<&Keypair>,
     blockhash: Hash,
 ) -> Vec<MevTxOutput> {
@@ -255,13 +253,7 @@ pub fn get_arbitrage_tx_outputs(
         .into_iter()
         .enumerate()
         .filter_map(|(i, path)| {
-            path.get_mev_txs(
-                program_id,
-                pool_states,
-                user_transfer_authority,
-                blockhash,
-                i,
-            )
+            path.get_mev_txs(pool_states, user_transfer_authority, blockhash, i)
         })
         .collect()
 }
@@ -346,6 +338,10 @@ mod tests {
                     Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
                     OrcaPoolWithBalance {
                         pool: OrcaPoolAddresses {
+                            program_id: Pubkey::from_str(
+                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                            )
+                            .unwrap(),
                             address: Pubkey::from_str(
                                 "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
                             )
@@ -377,6 +373,10 @@ mod tests {
                     Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap(),
                     OrcaPoolWithBalance {
                         pool: OrcaPoolAddresses {
+                            program_id: Pubkey::from_str(
+                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                            )
+                            .unwrap(),
                             address: Pubkey::from_str(
                                 "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
                             )
@@ -408,6 +408,10 @@ mod tests {
                     Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap(),
                     OrcaPoolWithBalance {
                         pool: OrcaPoolAddresses {
+                            program_id: Pubkey::from_str(
+                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                            )
+                            .unwrap(),
                             address: Pubkey::from_str(
                                 "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
                             )
@@ -459,13 +463,8 @@ mod tests {
                 },
             ],
         };
-        let arbs = get_arbitrage_tx_outputs(
-            &[path.clone()],
-            &pool_states,
-            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
-            None,
-            Hash::new_unique(),
-        );
+        let arbs =
+            get_arbitrage_tx_outputs(&[path.clone()], &pool_states, None, Hash::new_unique());
         assert_eq!(arbs[0].path_idx, 0);
         assert_eq!(
             arbs[0].input_output_pairs,
@@ -524,13 +523,7 @@ mod tests {
 
         let input_marginal_price_opt = path.get_input_amount_marginal_price(&pool_states);
         assert_eq!(input_marginal_price_opt, None);
-        let arbs = get_arbitrage_tx_outputs(
-            &[path],
-            &pool_states,
-            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
-            None,
-            Hash::new_unique(),
-        );
+        let arbs = get_arbitrage_tx_outputs(&[path], &pool_states, None, Hash::new_unique());
         assert!(arbs.is_empty());
     }
 
@@ -586,6 +579,10 @@ mod tests {
                 Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
                 OrcaPoolWithBalance {
                     pool: OrcaPoolAddresses {
+                        program_id: Pubkey::from_str(
+                            "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                        )
+                        .unwrap(),
                         address: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
                             .unwrap(),
                         pool_a_account: Pubkey::new_unique(),
@@ -614,13 +611,7 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let arbs = get_arbitrage_tx_outputs(
-            &vec![],
-            &pool_states,
-            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
-            None,
-            Hash::new_unique(),
-        );
+        let arbs = get_arbitrage_tx_outputs(&vec![], &pool_states, None, Hash::new_unique());
         assert!(arbs.is_empty());
     }
 
@@ -633,6 +624,10 @@ mod tests {
                     Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG").unwrap(),
                     OrcaPoolWithBalance {
                         pool: OrcaPoolAddresses {
+                            program_id: Pubkey::from_str(
+                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                            )
+                            .unwrap(),
                             address: Pubkey::from_str(
                                 "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
                             )
@@ -664,6 +659,10 @@ mod tests {
                     Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy").unwrap(),
                     OrcaPoolWithBalance {
                         pool: OrcaPoolAddresses {
+                            program_id: Pubkey::from_str(
+                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                            )
+                            .unwrap(),
                             address: Pubkey::from_str(
                                 "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
                             )
@@ -695,6 +694,10 @@ mod tests {
                     Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap(),
                     OrcaPoolWithBalance {
                         pool: OrcaPoolAddresses {
+                            program_id: Pubkey::from_str(
+                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                            )
+                            .unwrap(),
                             address: Pubkey::from_str(
                                 "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
                             )
@@ -756,13 +759,7 @@ mod tests {
                 }],
             },
         ];
-        let arbs = get_arbitrage_tx_outputs(
-            &paths,
-            &pool_states,
-            Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
-            None,
-            Hash::new_unique(),
-        );
+        let arbs = get_arbitrage_tx_outputs(&paths, &pool_states, None, Hash::new_unique());
         assert_eq!(arbs[0].path_idx, 0);
         assert_eq!(
             arbs[0].input_output_pairs,
