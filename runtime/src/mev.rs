@@ -2,7 +2,7 @@ pub mod arbitrage;
 pub mod utils;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{BufReader, Write},
     sync::Arc,
@@ -51,7 +51,8 @@ pub struct MevLog {
 #[derive(Debug, Clone)]
 pub struct Mev {
     pub log_send_channel: Sender<MevMsg>,
-    pub orca_program: Pubkey,
+    // A set of `Pubkey` for us to trigger MEV.
+    pub watched_programs: HashSet<Pubkey>,
 
     // These public keys are going to be loaded so we can ensure no other thread
     // modifies the data we are interested in.
@@ -68,6 +69,10 @@ pub struct Mev {
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct OrcaPoolAddresses {
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    program_id: Pubkey,
+
     #[serde(serialize_with = "serialize_b58")]
     #[serde(deserialize_with = "deserialize_b58")]
     address: Pubkey,
@@ -108,14 +113,6 @@ pub struct OrcaPoolAddresses {
     #[serde(skip_serializing)]
     #[serde(skip_deserializing)]
     pub pool_authority: Pubkey,
-}
-
-impl OrcaPoolAddresses {
-    pub fn populate_pool_authority(&mut self, program_id: &Pubkey) {
-        let (pool_authority, _authority_bump_seed) =
-            Pubkey::find_program_address(&[&self.address.to_bytes()[..]], &program_id);
-        self.pool_authority = pool_authority;
-    }
 }
 
 #[derive(Debug, Serialize)]
@@ -220,7 +217,11 @@ impl Mev {
     pub fn new(log_send_channel: Sender<MevMsg>, config: MevConfig) -> Self {
         Mev {
             log_send_channel,
-            orca_program: config.orca_program_id,
+            watched_programs: config
+                .watched_programs
+                .iter()
+                .map(|b58pubkey| b58pubkey.0)
+                .collect(),
             orca_monitored_accounts: Arc::new(config.orca_accounts),
             mev_paths: config.mev_paths,
             user_authority: Arc::new(config.user_authority_path.map(|path| {
@@ -282,6 +283,13 @@ impl Mev {
                                 ReadAccount(acc) => &acc,
                             };
                         let pool_acc = get_account(&mev_account.pool);
+                        // Owner of the pool should be the `program_id`.
+                        let program_id = pool_acc.1.owner();
+
+                        let (pool_authority, _authority_bump_seed) = Pubkey::find_program_address(
+                            &[&mev_account.pool.to_bytes()[..]],
+                            &program_id,
+                        );
                         let pool = SwapVersion::unpack(pool_acc.1.data())?;
 
                         let pool_a_acc = get_account(&mev_account.token_a);
@@ -302,12 +310,12 @@ impl Mev {
 
                         let pool_mint_pubkey = get_account(&mev_account.pool_mint).0;
                         let pool_fee_pubkey = get_account(&mev_account.pool_fee).0;
-                        let pool_authority_pubkey = get_account(&mev_account.pool_authority).0;
 
                         Ok((
                             pool_acc.0,
                             OrcaPoolWithBalance {
                                 pool: OrcaPoolAddresses {
+                                    program_id: *program_id,
                                     address: pool_acc.0,
                                     pool_a_account: pool_a_acc.0,
                                     pool_b_account: pool_b_acc.0,
@@ -315,7 +323,7 @@ impl Mev {
                                     destination: pool_destination_pubkey,
                                     pool_mint: pool_mint_pubkey,
                                     pool_fee: pool_fee_pubkey,
-                                    pool_authority: pool_authority_pubkey,
+                                    pool_authority: pool_authority,
                                 },
                                 pool_a_balance: pool_a_account.amount,
                                 pool_b_balance: pool_b_account.amount,
@@ -333,7 +341,7 @@ impl Mev {
         tx.message()
             .account_keys()
             .iter()
-            .any(|account_key| &self.orca_program == account_key)
+            .any(|account_key| self.watched_programs.contains(account_key))
     }
 
     /// Log the pool state after a transaction interacted with one or more
@@ -352,7 +360,6 @@ impl Mev {
         let mut mev_tx_outputs = get_arbitrage_tx_outputs(
             &self.mev_paths,
             &post_tx_pool_state,
-            self.orca_program,
             self.user_authority.as_ref().as_ref(),
             blockhash,
         );
@@ -465,6 +472,10 @@ fn test_log_serialization() {
                 Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM").unwrap(),
                 OrcaPoolWithBalance {
                     pool: OrcaPoolAddresses {
+                        program_id: Pubkey::from_str(
+                            "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
+                        )
+                        .unwrap(),
                         address: Pubkey::from_str("4uQeVj5tqViQh7yWWGStvkEG1Zmhx6uasJtWCJziofM")
                             .unwrap(),
                         pool_a_account: Pubkey::from_str(

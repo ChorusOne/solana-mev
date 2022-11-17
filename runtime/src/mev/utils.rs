@@ -12,8 +12,7 @@ pub struct AllOrcaPoolAddresses(pub Vec<OrcaPoolAddresses>);
 pub struct MevConfig {
     pub log_path: PathBuf,
 
-    #[serde(deserialize_with = "deserialize_b58")]
-    pub orca_program_id: Pubkey,
+    pub watched_programs: Vec<B58Pubkey>,
 
     #[serde(rename(deserialize = "orca_account"))]
     pub orca_accounts: AllOrcaPoolAddresses,
@@ -24,14 +23,6 @@ pub struct MevConfig {
     pub mev_paths: Vec<MevPath>,
 
     pub user_authority_path: Option<PathBuf>,
-}
-
-impl MevConfig {
-    pub fn populate_orca_pools_authority(&mut self) {
-        for orca_acc in self.orca_accounts.0.iter_mut() {
-            orca_acc.populate_pool_authority(&self.orca_program_id);
-        }
-    }
 }
 
 /// Function to use when serializing a public key, to print it using base58.
@@ -73,11 +64,18 @@ where
     }
 }
 
+#[derive(Serialize, Deserialize, Eq, Hash, PartialEq, Debug)]
+#[serde(transparent)]
+pub struct B58Pubkey(
+    #[serde(serialize_with = "serialize_b58")]
+    #[serde(deserialize_with = "deserialize_b58")]
+    pub Pubkey,
+);
+
 pub fn get_mev_config_file(config_path: &PathBuf) -> MevConfig {
     let config_str = read_to_string(config_path).expect("Could not open config path.");
-    let mut config_file: MevConfig =
+    let config_file: MevConfig =
         toml::from_str(&config_str).expect("Could not deserialize MEV config file.");
-    config_file.populate_orca_pools_authority();
     config_file
 }
 
@@ -87,15 +85,16 @@ mod tests {
 
     use crate::mev::{
         arbitrage::{PairInfo, TradeDirection},
+        utils::B58Pubkey,
         *,
     };
 
     #[test]
     fn test_deserialization() {
-        let mut sample_config: MevConfig = toml::from_str(
+        let sample_config: MevConfig = toml::from_str(
             r#"
     log_path = '/tmp/mev.log'
-    orca_program_id = '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP'
+    watched_programs = ['9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP']
 
     [[orca_account]]
         _id = 'USDC/USDT[stable]'
@@ -122,31 +121,15 @@ mod tests {
     "#,
         )
         .expect("Failed to deserialize");
-        sample_config.populate_orca_pools_authority();
-
-        let (authority_usdc_usdt, _authority_bump_seed) = Pubkey::find_program_address(
-            &[
-                &Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ")
-                    .unwrap()
-                    .to_bytes()[..],
-            ],
-            &sample_config.orca_program_id,
-        );
-        let (authority_sol_usdc, _authority_bump_seed) = Pubkey::find_program_address(
-            &[
-                &Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
-                    .unwrap()
-                    .to_bytes()[..],
-            ],
-            &sample_config.orca_program_id,
-        );
 
         let expected_mev_config = MevConfig {
             log_path: PathBuf::from_str("/tmp/mev.log").unwrap(),
-            orca_program_id: Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP")
-                .unwrap(),
+            watched_programs: vec![B58Pubkey(
+                Pubkey::from_str("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP").unwrap(),
+            )],
             orca_accounts: AllOrcaPoolAddresses(vec![
                 OrcaPoolAddresses {
+                    program_id: Pubkey::default(),
                     address: Pubkey::from_str("FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ")
                         .unwrap(),
                     pool_a_account: Pubkey::from_str(
@@ -163,9 +146,10 @@ mod tests {
                         .unwrap(),
                     pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
                         .unwrap(),
-                    pool_authority: authority_usdc_usdt,
+                    pool_authority: Pubkey::default(),
                 },
                 OrcaPoolAddresses {
+                    program_id: Pubkey::default(),
                     address: Pubkey::from_str("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U")
                         .unwrap(),
                     pool_a_account: Pubkey::from_str(
@@ -182,7 +166,7 @@ mod tests {
                         .unwrap(),
                     pool_fee: Pubkey::from_str("8JnSiuvQq3BVuCU3n4DrSTw9chBSPvEMswrhtifVkr1o")
                         .unwrap(),
-                    pool_authority: authority_sol_usdc,
+                    pool_authority: Pubkey::default(),
                 },
             ]),
             mev_paths: vec![MevPath {
