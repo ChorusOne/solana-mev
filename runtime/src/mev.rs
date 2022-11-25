@@ -120,6 +120,7 @@ pub struct OrcaPoolWithBalance {
     pool: OrcaPoolAddresses,
     pool_a_balance: u64,
     pool_b_balance: u64,
+    source_balance: Option<u64>,
     fees: Fees,
 
     #[serde(skip_serializing)]
@@ -300,8 +301,19 @@ impl Mev {
                         let pool_b_account =
                             spl_token::state::Account::unpack(pool_b_acc.1.data())?;
 
-                        let pool_source_pubkey =
-                            mev_account.source.as_ref().map(|src| get_account(src).0);
+                        let pool_source_pubkey_amount = mev_account
+                            .source
+                            .as_ref()
+                            .map(|src| {
+                                let (source_pubkey, source_account) = get_account(src);
+                                let spl_acc =
+                                    spl_token::state::Account::unpack(source_account.data())?;
+                                Ok::<(&solana_sdk::pubkey::Pubkey, u64), ProgramError>((
+                                    source_pubkey,
+                                    spl_acc.amount,
+                                ))
+                            })
+                            .transpose()?;
 
                         let pool_destination_pubkey = mev_account
                             .destination
@@ -319,7 +331,7 @@ impl Mev {
                                     address: pool_acc.0,
                                     pool_a_account: pool_a_acc.0,
                                     pool_b_account: pool_b_acc.0,
-                                    source: pool_source_pubkey,
+                                    source: pool_source_pubkey_amount.map(|(src, _amount)| *src),
                                     destination: pool_destination_pubkey,
                                     pool_mint: pool_mint_pubkey,
                                     pool_fee: pool_fee_pubkey,
@@ -329,6 +341,8 @@ impl Mev {
                                 pool_b_balance: pool_b_account.amount,
                                 fees: Fees(pool.fees().clone()),
                                 curve_calculator: pool.swap_curve().calculator.clone(),
+                                source_balance: pool_source_pubkey_amount
+                                    .map(|(_src, amount)| amount),
                             },
                         ))
                     })
@@ -507,6 +521,7 @@ fn test_log_serialization() {
                         host_fee_denominator: 10,
                     }),
                     curve_calculator,
+                    source_balance: None,
                 },
             )]
             .into_iter()
