@@ -66,6 +66,12 @@ pub struct MevTxOutput {
     pub marginal_price: f64,
 }
 
+pub struct PathCalculationOutput {
+    optimal_input: f64,
+    marginal_price: f64,
+    source_token_balance: Option<u64>,
+}
+
 impl MevPath {
     fn get_mev_txs(
         &self,
@@ -74,8 +80,14 @@ impl MevPath {
         blockhash: Hash,
         path_idx: usize,
     ) -> Option<MevTxOutput> {
-        let (initial_amount, marginal_price) = self.get_input_amount_marginal_price(pool_states)?;
-        let initial_amount = initial_amount.floor() as u128;
+        let path_output = self.get_path_calculation_output(pool_states)?;
+        let initial_amount = path_output.optimal_input.floor() as u128;
+
+        let initial_amount = if let Some(source_token_balance) = path_output.source_token_balance {
+            initial_amount.min(source_token_balance as u128)
+        } else {
+            initial_amount
+        };
         let mut amount_in = initial_amount;
         let mut input_output_pairs = Vec::with_capacity(self.path.len());
 
@@ -181,7 +193,7 @@ impl MevPath {
                 path_idx,
                 input_output_pairs,
                 profit: amount_in.saturating_sub(initial_amount) as u64,
-                marginal_price,
+                marginal_price: path_output.marginal_price,
             })
         }
     }
@@ -189,11 +201,16 @@ impl MevPath {
     /// Get (`input`, `marginal_price`), `input` is the input of the first hop
     /// of the path, and `marginal_price` is the multiplication of all fees and
     /// ratios from the path.
-    fn get_input_amount_marginal_price(&self, pool_states: &PoolStates) -> Option<(f64, f64)> {
+    fn get_path_calculation_output(
+        &self,
+        pool_states: &PoolStates,
+    ) -> Option<PathCalculationOutput> {
         let mut marginal_prices_acc = 1_f64;
         let mut optimal_input_denominator = 0_f64;
         let mut previous_ratio = 1_f64;
         let mut total_fee_acc = 1_f64;
+
+        let source_amount = pool_states.0.get(&self.path.first()?.pool)?.source_balance;
         for pair_info in &self.path {
             let tokens_state = pool_states.0.get(&pair_info.pool)?;
 
@@ -236,7 +253,11 @@ impl MevPath {
         if marginal_prices_acc > 1_f64 {
             let optimal_input_numerator = marginal_prices_acc.sqrt() - 1_f64;
             let optimal_input = optimal_input_numerator / optimal_input_denominator;
-            Some((optimal_input, marginal_prices_acc))
+            Some(PathCalculationOutput {
+                optimal_input,
+                marginal_price: marginal_prices_acc,
+                source_token_balance: source_amount,
+            })
         } else {
             None
         }
@@ -367,6 +388,7 @@ mod tests {
                             host_fee_denominator: 1,
                         }),
                         curve_calculator: curve_calculator.clone(),
+                        source_balance: None,
                     },
                 ),
                 (
@@ -402,6 +424,7 @@ mod tests {
                             host_fee_denominator: 1,
                         }),
                         curve_calculator: curve_calculator.clone(),
+                        source_balance: None,
                     },
                 ),
                 (
@@ -437,6 +460,7 @@ mod tests {
                             host_fee_denominator: 1,
                         }),
                         curve_calculator,
+                        source_balance: None,
                     },
                 ),
             ]
@@ -486,9 +510,9 @@ mod tests {
         assert_eq!(arbs[0].marginal_price, 1010.9851646730779);
         assert_eq!(arbs[0].profit, 126247667211);
 
-        let (input, marginal_price) = path.get_input_amount_marginal_price(&pool_states).unwrap();
-        assert_eq!(marginal_price, 1010.9851646730779);
-        assert_eq!(input, 4099483579.109189);
+        let path_output = path.get_path_calculation_output(&pool_states).unwrap();
+        assert_eq!(path_output.marginal_price, 1010.9851646730779);
+        assert_eq!(path_output.optimal_input, 4099483579.109189);
 
         pool_states
             .0
@@ -521,8 +545,8 @@ mod tests {
             .unwrap()
             .pool_a_balance = 1384360183450;
 
-        let input_marginal_price_opt = path.get_input_amount_marginal_price(&pool_states);
-        assert_eq!(input_marginal_price_opt, None);
+        let path_output = path.get_path_calculation_output(&pool_states);
+        assert_eq!(path_output.is_none(), true);
         let arbs = get_arbitrage_tx_outputs(&[path], &pool_states, None, Hash::new_unique());
         assert!(arbs.is_empty());
     }
@@ -606,6 +630,7 @@ mod tests {
                         host_fee_denominator: 1,
                     }),
                     curve_calculator,
+                    source_balance: None,
                 },
             )]
             .into_iter()
@@ -653,6 +678,7 @@ mod tests {
                             host_fee_denominator: 1,
                         }),
                         curve_calculator: curve_calculator.clone(),
+                        source_balance: None,
                     },
                 ),
                 (
@@ -688,6 +714,7 @@ mod tests {
                             host_fee_denominator: 1,
                         }),
                         curve_calculator: curve_calculator.clone(),
+                        source_balance: None,
                     },
                 ),
                 (
@@ -723,6 +750,7 @@ mod tests {
                             host_fee_denominator: 1,
                         }),
                         curve_calculator,
+                        source_balance: None,
                     },
                 ),
             ]
