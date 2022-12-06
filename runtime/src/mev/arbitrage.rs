@@ -546,7 +546,7 @@ mod tests {
             .pool_a_balance = 1384360183450;
 
         let path_output = path.get_path_calculation_output(&pool_states);
-        assert_eq!(path_output.is_none(), true);
+        assert!(path_output.is_none());
         let arbs = get_arbitrage_tx_outputs(&[path], &pool_states, None, Hash::new_unique());
         assert!(arbs.is_empty());
     }
