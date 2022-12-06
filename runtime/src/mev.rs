@@ -216,6 +216,23 @@ pub struct PrePostPoolStates {
 
 impl Mev {
     pub fn new(log_send_channel: Sender<MevMsg>, config: MevConfig) -> Self {
+        let mev_paths = config
+            .mev_paths
+            .into_iter()
+            .map(|path| match (path.path.first(), path.path.last()) {
+                (None, _) | (_, None) => panic!("MEV paths should have at least 1 element"),
+                (Some(pair_a), Some(pair_b)) => {
+                    if pair_a.pool != pair_b.pool {
+                        panic!(
+                            "MEV paths should start and end at the same pool, \
+path that starts with address {} finishes at address {}",
+                            pair_a.pool, pair_b.pool
+                        );
+                    }
+                    path
+                }
+            })
+            .collect();
         Mev {
             log_send_channel,
             watched_programs: config
@@ -224,7 +241,7 @@ impl Mev {
                 .map(|b58pubkey| b58pubkey.0)
                 .collect(),
             orca_monitored_accounts: Arc::new(config.orca_accounts),
-            mev_paths: config.mev_paths,
+            mev_paths,
             user_authority: Arc::new(config.user_authority_path.map(|path| {
                 let file = File::open(path).expect("[MEV] Could not open path");
                 let reader = BufReader::new(file);
