@@ -1340,6 +1340,7 @@ impl BankingStage {
     fn record_transactions(
         bank_slot: Slot,
         transactions: Vec<VersionedTransaction>,
+        is_executing_mev_batch: bool,
         recorder: &TransactionRecorder,
     ) -> RecordTransactionsSummary {
         let mut record_transactions_timings = RecordTransactionsTimings::default();
@@ -1353,6 +1354,7 @@ impl BankingStage {
             let (hash, hash_time) = measure!(hash_transactions(&transactions), "hash");
             record_transactions_timings.hash_us = hash_time.as_us();
 
+            // TODO(mev-rebase): Feed the is_executing_mev_batch into here to avoid failed batches.
             let (res, poh_record_time) =
                 measure!(recorder.record(bank_slot, hash, transactions), "hash");
             record_transactions_timings.poh_record_us = poh_record_time.as_us();
@@ -1388,6 +1390,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         poh: &TransactionRecorder,
         batch: &TransactionBatch,
+        is_executing_mev_batch: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         log_messages_bytes_limit: Option<usize>,
@@ -1470,7 +1473,7 @@ impl BankingStage {
         execute_and_commit_timings.freeze_lock_us = freeze_lock_time.as_us();
 
         let (record_transactions_summary, record_time) = measure!(
-            Self::record_transactions(bank.slot(), executed_transactions, poh),
+            Self::record_transactions(bank.slot(), executed_transactions, is_executing_mev_batch, poh),
             "record_transactions",
         );
         execute_and_commit_timings.record_us = record_time.as_us();
@@ -1635,6 +1638,7 @@ impl BankingStage {
         txs: &[SanitizedTransaction],
         poh: &TransactionRecorder,
         chunk_offset: usize,
+        is_executing_mev_batch: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
@@ -1673,6 +1677,7 @@ impl BankingStage {
                 bank,
                 poh,
                 &batch,
+                is_executing_mev_batch,
                 transaction_status_sender,
                 gossip_vote_sender,
                 log_messages_bytes_limit,
@@ -1863,6 +1868,7 @@ impl BankingStage {
                 &transactions[chunk_start..chunk_end],
                 poh,
                 chunk_start,
+                false,
                 transaction_status_sender.clone(),
                 gossip_vote_sender,
                 qos_service,
@@ -1900,6 +1906,7 @@ impl BankingStage {
                     &[mev_sanitized_tx],
                     poh,
                     chunk_start,
+                    true,
                     transaction_status_sender.clone(),
                     gossip_vote_sender,
                     qos_service,
@@ -2829,7 +2836,7 @@ mod tests {
                 system_transaction::transfer(&keypair2, &pubkey2, 1, genesis_config.hash()).into(),
             ];
 
-            let _ = BankingStage::record_transactions(bank.slot(), txs.clone(), &recorder);
+            let _ = BankingStage::record_transactions(bank.slot(), txs.clone(), false, &recorder);
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
             assert_eq!(entry.transactions, txs);
 
@@ -2837,7 +2844,7 @@ mod tests {
             // record_transactions should throw MaxHeightReached
             let next_slot = bank.slot() + 1;
             let RecordTransactionsSummary { result, .. } =
-                BankingStage::record_transactions(next_slot, txs, &recorder);
+                BankingStage::record_transactions(next_slot, txs, false, &recorder);
             assert_matches!(result, Err(PohRecorderError::MaxHeightReached));
             // Should receive nothing from PohRecorder b/c record failed
             assert!(entry_receiver.try_recv().is_err());
@@ -3042,6 +3049,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3095,6 +3103,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3271,6 +3280,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &qos_service,
@@ -3311,6 +3321,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &qos_service,
@@ -3408,6 +3419,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3869,6 +3881,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
                 }),
@@ -4038,6 +4051,7 @@ mod tests {
                 &[sanitized_tx.clone()],
                 &recorder,
                 0,
+                false,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
                 }),
