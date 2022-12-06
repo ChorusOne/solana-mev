@@ -1368,6 +1368,7 @@ impl BankingStage {
     fn record_transactions(
         bank_slot: Slot,
         txs: &[SanitizedTransaction],
+        is_executing_mev_batch: bool,
         execution_results: &[TransactionExecutionResult],
         recorder: &TransactionRecorder,
     ) -> RecordTransactionsSummary {
@@ -1383,7 +1384,13 @@ impl BankingStage {
                     .enumerate()
                     .filter_map(|(i, (execution_result, tx))| {
                         if execution_result.was_executed() {
-                            Some((tx.to_versioned_transaction(), i))
+                            if is_executing_mev_batch
+                                && !execution_result.was_executed_successfully()
+                            {
+                                None
+                            } else {
+                                Some((tx.to_versioned_transaction(), i))
+                            }
                         } else {
                             None
                         }
@@ -1449,6 +1456,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         poh: &TransactionRecorder,
         batch: &TransactionBatch,
+        is_executing_mev_batch: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         mev: Option<&Mev>,
@@ -1535,6 +1543,7 @@ impl BankingStage {
                 Self::record_transactions(
                     bank.slot(),
                     batch.sanitized_transactions(),
+                    is_executing_mev_batch,
                     &execution_results,
                     poh,
                 )
@@ -1676,6 +1685,7 @@ impl BankingStage {
         txs: &[SanitizedTransaction],
         poh: &TransactionRecorder,
         chunk_offset: usize,
+        is_executing_mev_batch: bool,
         transaction_status_sender: Option<TransactionStatusSender>,
         gossip_vote_sender: &ReplayVoteSender,
         qos_service: &QosService,
@@ -1713,6 +1723,7 @@ impl BankingStage {
                 bank,
                 poh,
                 &batch,
+                is_executing_mev_batch,
                 transaction_status_sender,
                 gossip_vote_sender,
                 mev,
@@ -1901,6 +1912,7 @@ impl BankingStage {
                 &transactions[chunk_start..chunk_end],
                 poh,
                 chunk_start,
+                false,
                 transaction_status_sender.clone(),
                 gossip_vote_sender,
                 qos_service,
@@ -1937,6 +1949,7 @@ impl BankingStage {
                     &[mev_sanitized_tx],
                     poh,
                     chunk_start,
+                    true,
                     transaction_status_sender.clone(),
                     gossip_vote_sender,
                     qos_service,
@@ -2882,7 +2895,8 @@ mod tests {
             ]);
 
             let mut results = vec![new_execution_result(Ok(())); 2];
-            let _ = BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
+            let _ =
+                BankingStage::record_transactions(bank.slot(), &txs, false, &results, &recorder);
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
             assert_eq!(entry.transactions.len(), txs.len());
 
@@ -2895,7 +2909,7 @@ mod tests {
                 result,
                 retryable_indexes,
                 ..
-            } = BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
+            } = BankingStage::record_transactions(bank.slot(), &txs, false, &results, &recorder);
             result.unwrap();
             assert!(retryable_indexes.is_empty());
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
@@ -2907,7 +2921,7 @@ mod tests {
                 result,
                 retryable_indexes,
                 ..
-            } = BankingStage::record_transactions(bank.slot(), &txs, &results, &recorder);
+            } = BankingStage::record_transactions(bank.slot(), &txs, false, &results, &recorder);
             result.unwrap();
             assert!(retryable_indexes.is_empty());
             let (_bank, (entry, _tick_height)) = entry_receiver.recv().unwrap();
@@ -2921,7 +2935,7 @@ mod tests {
                 result,
                 retryable_indexes,
                 ..
-            } = BankingStage::record_transactions(next_slot, &txs, &results, &recorder);
+            } = BankingStage::record_transactions(next_slot, &txs, false, &results, &recorder);
             assert_matches!(result, Err(PohRecorderError::MaxHeightReached));
             // The first result was an error so it's filtered out. The second result was Ok(),
             // so it should be marked as retryable
@@ -3129,6 +3143,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3182,6 +3197,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3276,6 +3292,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &qos_service,
@@ -3316,6 +3333,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &qos_service,
@@ -3413,6 +3431,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 None,
                 &gossip_vote_sender,
                 &QosService::new(Arc::new(RwLock::new(CostModel::default())), 1),
@@ -3867,6 +3886,7 @@ mod tests {
                 &transactions,
                 &recorder,
                 0,
+                false,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
                 }),
@@ -4029,6 +4049,7 @@ mod tests {
                 &[sanitized_tx.clone()],
                 &recorder,
                 0,
+                false,
                 Some(TransactionStatusSender {
                     sender: transaction_status_sender,
                 }),
