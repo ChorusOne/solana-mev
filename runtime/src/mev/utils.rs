@@ -1,4 +1,4 @@
-use std::{fs::read_to_string, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fs::read_to_string, path::PathBuf, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serializer};
 use solana_sdk::pubkey::Pubkey;
@@ -24,7 +24,7 @@ pub struct MevConfig {
 
     pub user_authority_path: Option<PathBuf>,
 
-    pub minimum_profit: Vec<(B58Pubkey, u64)>,
+    pub minimum_profit: HashMap<B58Pubkey, u64>,
 }
 
 /// Function to use when serializing a public key, to print it using base58.
