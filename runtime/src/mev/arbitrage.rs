@@ -234,13 +234,7 @@ mod tests {
                                 "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
                             )
                             .unwrap(),
-                            pool_a_account: Pubkey::new_unique(),
-                            pool_b_account: Pubkey::new_unique(),
-                            source: None,
-                            destination: None,
-                            pool_mint: Pubkey::new_unique(),
-                            pool_fee: Pubkey::new_unique(),
-                            pool_authority: Pubkey::default(),
+                            ..Default::default()
                         },
                         pool_a_balance: 4618233234,
                         pool_b_balance: 6400518033,
@@ -270,13 +264,7 @@ mod tests {
                                 "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
                             )
                             .unwrap(),
-                            pool_a_account: Pubkey::new_unique(),
-                            pool_b_account: Pubkey::new_unique(),
-                            source: None,
-                            destination: None,
-                            pool_mint: Pubkey::new_unique(),
-                            pool_fee: Pubkey::new_unique(),
-                            pool_authority: Pubkey::default(),
+                            ..Default::default()
                         },
                         pool_a_balance: 54896627850684,
                         pool_b_balance: 13408494240,
@@ -306,13 +294,7 @@ mod tests {
                                 "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
                             )
                             .unwrap(),
-                            pool_a_account: Pubkey::new_unique(),
-                            pool_b_account: Pubkey::new_unique(),
-                            source: None,
-                            destination: None,
-                            pool_mint: Pubkey::new_unique(),
-                            pool_fee: Pubkey::new_unique(),
-                            pool_authority: Pubkey::default(),
+                            ..Default::default()
                         },
                         pool_a_balance: 400881658679,
                         pool_b_balance: 138436018345,
@@ -505,13 +487,7 @@ mod tests {
                         .unwrap(),
                         address: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
                             .unwrap(),
-                        pool_a_account: Pubkey::new_unique(),
-                        pool_b_account: Pubkey::new_unique(),
-                        source: None,
-                        destination: None,
-                        pool_mint: Pubkey::new_unique(),
-                        pool_fee: Pubkey::new_unique(),
-                        pool_authority: Pubkey::default(),
+                        ..Default::default()
                     },
                     pool_a_balance: 4618233234,
                     pool_b_balance: 6400518033,
@@ -563,13 +539,7 @@ mod tests {
                                 "v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG",
                             )
                             .unwrap(),
-                            pool_a_account: Pubkey::new_unique(),
-                            pool_b_account: Pubkey::new_unique(),
-                            source: None,
-                            destination: None,
-                            pool_mint: Pubkey::new_unique(),
-                            pool_fee: Pubkey::new_unique(),
-                            pool_authority: Pubkey::default(),
+                            ..Default::default()
                         },
                         pool_a_balance: 4618233234,
                         pool_b_balance: 6400518033,
@@ -599,13 +569,7 @@ mod tests {
                                 "B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy",
                             )
                             .unwrap(),
-                            pool_a_account: Pubkey::new_unique(),
-                            pool_b_account: Pubkey::new_unique(),
-                            source: None,
-                            destination: None,
-                            pool_mint: Pubkey::new_unique(),
-                            pool_fee: Pubkey::new_unique(),
-                            pool_authority: Pubkey::default(),
+                            ..Default::default()
                         },
                         pool_a_balance: 54896627850684,
                         pool_b_balance: 13408494240,

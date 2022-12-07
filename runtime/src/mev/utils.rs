@@ -144,13 +144,11 @@ mod tests {
                         "C1ZrV56rf1wbDzcnHY6FpNaVmzT5D8WtyEKS1FAGrboe",
                     )
                     .unwrap(),
-                    source: None,
-                    destination: None,
                     pool_mint: Pubkey::from_str("33k9G5HeH5JFukXTVxx3EmZrqjhb19Ej2GC2kqVPCKnM")
                         .unwrap(),
                     pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
                         .unwrap(),
-                    pool_authority: Pubkey::default(),
+                    ..Default::default()
                 },
                 OrcaPoolAddresses {
                     program_id: Pubkey::default(),
@@ -164,13 +162,11 @@ mod tests {
                         "75HgnSvXbWKZBpZHveX68ZzAhDqMzNDS29X6BGLtxMo1",
                     )
                     .unwrap(),
-                    source: None,
-                    destination: None,
                     pool_mint: Pubkey::from_str("APDFRM3HMr8CAGXwKHiu2f5ePSpaiEJhaURwhsRrUUt9")
                         .unwrap(),
                     pool_fee: Pubkey::from_str("8JnSiuvQq3BVuCU3n4DrSTw9chBSPvEMswrhtifVkr1o")
                         .unwrap(),
-                    pool_authority: Pubkey::default(),
+                    ..Default::default()
                 },
             ]),
             mev_paths: vec![MevPath {

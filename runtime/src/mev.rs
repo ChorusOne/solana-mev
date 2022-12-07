@@ -76,7 +76,7 @@ pub struct Mev {
     pub usdc_minimum_profit: u64,
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct OrcaPoolAddresses {
     #[serde(skip_serializing)]
     #[serde(skip_deserializing)]
@@ -122,6 +122,16 @@ pub struct OrcaPoolAddresses {
     #[serde(skip_serializing)]
     #[serde(skip_deserializing)]
     pub pool_authority: Pubkey,
+
+    /// Mint of pool's a account.
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    pub pool_a_mint: Pubkey,
+
+    /// Mint of pool's b account.
+    #[serde(skip_serializing)]
+    #[serde(skip_deserializing)]
+    pub pool_b_mint: Pubkey,
 }
 
 #[derive(Debug, Serialize)]
@@ -367,6 +377,8 @@ path that starts with address {} finishes at address \
                                     pool_mint: pool_mint_pubkey,
                                     pool_fee: pool_fee_pubkey,
                                     pool_authority: pool_authority,
+                                    pool_a_mint: Pubkey::new(&pool_a_account.mint.to_bytes()),
+                                    pool_b_mint: Pubkey::new(&pool_b_account.mint.to_bytes()),
                                 },
                                 pool_a_balance: pool_a_account.amount,
                                 pool_b_balance: pool_b_account.amount,
@@ -666,13 +678,12 @@ fn test_log_serialization() {
                             "CiDwVBFgWV9E5MvXWoLgnEgn2hK7rJikbvfWavzAQz3",
                         )
                         .unwrap(),
-                        source: None,
-                        destination: None,
                         pool_mint: Pubkey::from_str("33k9G5HeH5JFukXTVxx3EmZrqjhb19Ej2GC2kqVPCKnM")
                             .unwrap(),
                         pool_fee: Pubkey::from_str("GqtosegQU4ad7W9AMHAQuuAFnjBQZ4VB4eZuPFrz8ALr")
                             .unwrap(),
                         pool_authority: authority_pubkey,
+                        ..Default::default()
                     },
                     pool_a_balance: 1,
                     pool_b_balance: 1,
