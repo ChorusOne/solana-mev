@@ -10,7 +10,7 @@ use std::{
 };
 
 use crossbeam_channel::{unbounded, Sender};
-use log::error;
+use log::{error, warn};
 use serde::{
     ser::{SerializeMap, SerializeStruct},
     Serialize, Serializer,
@@ -25,7 +25,10 @@ use solana_sdk::{
     transaction::{MevKeys, MevPoolKeys, SanitizedTransaction},
 };
 use spl_token::solana_program::{program_error::ProgramError, program_pack::Pack};
-use spl_token_swap::{curve::calculator::CurveCalculator, state::SwapVersion};
+use spl_token_swap::{
+    curve::calculator::{CurveCalculator, SwapWithoutFeesResult},
+    state::SwapVersion,
+};
 
 use crate::{
     accounts::LoadedTransaction,
@@ -35,7 +38,10 @@ use crate::{
 };
 
 use self::{
-    arbitrage::{get_arbitrage_tx_outputs, MevOpportunityWithInput, MevPath, MevTxOutput},
+    arbitrage::{
+        create_swap_tx, InputOutputPairs, InputOutputTokenType, MevOpportunityWithInput, MevPath,
+        MevTxOutput, SwapArguments, TradeDirection,
+    },
     utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
 
@@ -65,6 +71,9 @@ pub struct Mev {
     // Key for the user authority for signing transactions.
     // If `None`, we do not try to craft MEV txs.
     pub user_authority: Arc<Option<Keypair>>,
+
+    // Minimum profit to execute MEV transactions with the USDC token.
+    pub usdc_minimum_profit: u64,
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -222,10 +231,14 @@ impl Mev {
             .map(|path| match (path.path.first(), path.path.last()) {
                 (None, _) | (_, None) => panic!("MEV paths should have at least 1 element"),
                 (Some(pair_a), Some(pair_b)) => {
+                    if pair_a == pair_b {
+                        panic!("MEV paths should not end in the same pool with the same direction of trade")
+                    }
                     if pair_a.pool != pair_b.pool {
                         panic!(
                             "MEV paths should start and end at the same pool, \
-path that starts with address {} finishes at address {}",
+path that starts with address {} finishes at address \
+{}",
                             pair_a.pool, pair_b.pool
                         );
                     }
@@ -250,6 +263,7 @@ path that starts with address {} finishes at address {}",
                 Keypair::from_bytes(&secret_key_bytes)
                     .expect("[MEV] Could not generate Keypair from path")
             })),
+            usdc_minimum_profit: config.usdc_minimum_profit,
         }
     }
 
@@ -388,12 +402,7 @@ path that starts with address {} finishes at address {}",
         blockhash: Hash,
     ) -> Option<(SanitizedTransaction, u64)> {
         let post_tx_pool_state = self.get_all_orca_monitored_accounts(loaded_tx)?.ok()?;
-        let mut mev_tx_outputs = get_arbitrage_tx_outputs(
-            &self.mev_paths,
-            &post_tx_pool_state,
-            self.user_authority.as_ref().as_ref(),
-            blockhash,
-        );
+        let mut mev_tx_outputs = self.get_arbitrage_tx_outputs(&post_tx_pool_state, blockhash);
 
         if let Err(err) = self.log_send_channel.send(MevMsg::Log(PrePostPoolStates {
             transaction_hash: *tx.message_hash(),
@@ -419,6 +428,146 @@ path that starts with address {} finishes at address {}",
             error!("[MEV] Could not log arbitrage, error: {}", err);
         }
         Some((sanitized_tx?, profit))
+    }
+
+    pub fn get_arbitrage_tx_outputs(
+        &self,
+        pool_states: &PoolStates,
+        blockhash: Hash,
+    ) -> Vec<MevTxOutput> {
+        self.mev_paths
+            .iter()
+            .enumerate()
+            .filter_map(|(path_idx, mev_path)| {
+                let path_output = mev_path.get_path_calculation_output(pool_states)?;
+                let initial_amount = path_output.optimal_input.floor() as u128;
+
+                let initial_amount = if let Some(source_token_balance) = path_output.source_token_balance {
+                    initial_amount.min(source_token_balance as u128)
+                } else {
+                    initial_amount
+                };
+                let mut amount_in = initial_amount;
+                let mut input_output_pairs = Vec::with_capacity(mev_path.path.len());
+
+                let mut swap_arguments_vec = Vec::with_capacity(mev_path.path.len());
+                for pair_info in &mev_path.path {
+                    let pool_state = pool_states.0.get(&pair_info.pool)?;
+
+                    let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
+                    let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
+
+                    let total_fees = trade_fee.checked_add(owner_fee)?;
+                    let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
+
+                    let (
+                        trade_direction,
+                        source_pubkey,
+                        swap_source_pubkey,
+                        destination_pubkey,
+                        swap_destination_pubkey,
+                        swap_source_amount,
+                        swap_destination_amount,
+                    ) = match pair_info.direction {
+                        TradeDirection::AtoB => (
+                            spl_token_swap::curve::calculator::TradeDirection::AtoB,
+                            pool_state.pool.source,
+                            pool_state.pool.pool_a_account,
+                            pool_state.pool.destination,
+                            pool_state.pool.pool_b_account,
+                            pool_state.pool_a_balance,
+                            pool_state.pool_b_balance,
+                        ),
+                        TradeDirection::BtoA => (
+                            spl_token_swap::curve::calculator::TradeDirection::BtoA,
+                            pool_state.pool.destination,
+                            pool_state.pool.pool_b_account,
+                            pool_state.pool.source,
+                            pool_state.pool.pool_a_account,
+                            pool_state.pool_b_balance,
+                            pool_state.pool_a_balance,
+                        ),
+                    };
+
+                    // For the Constant Product Curve the `trade_direction` is
+                    // ignored and it's our responsibility to provide the right
+                    // token's balance from the pool.
+                    let SwapWithoutFeesResult {
+                        source_amount_swapped: _,
+                        destination_amount_swapped,
+                    } = pool_state.curve_calculator.swap_without_fees(
+                        source_amount_less_fees,
+                        swap_source_amount as u128,
+                        swap_destination_amount as u128,
+                        // Again, this argument is useless!
+                        trade_direction,
+                    )?;
+
+                    input_output_pairs.push(InputOutputPairs {
+                        token_in: amount_in as u64,
+                        token_out: destination_amount_swapped as u64,
+                    });
+
+                    let swap_arguments = match (source_pubkey, destination_pubkey) {
+                        (Some(source), Some(destination)) => Some(SwapArguments {
+                            program_id: pool_state.pool.program_id,
+                            swap_pubkey: pair_info.pool,
+                            authority_pubkey: pool_state.pool.pool_authority,
+                            source_pubkey: source,
+                            swap_source_pubkey,
+                            swap_destination_pubkey,
+                            destination_pubkey: destination,
+                            pool_mint_pubkey: pool_state.pool.pool_mint,
+                            pool_fee_pubkey: pool_state.pool.pool_fee,
+                            token_program: inline_spl_token::id(),
+                            amount_in: amount_in as u64,
+                            minimum_amount_out: 0,
+                        }),
+                        _ => None,
+                    };
+
+                    amount_in = destination_amount_swapped;
+                    swap_arguments_vec.push(swap_arguments);
+                }
+
+                let profit = amount_in.saturating_sub(initial_amount) as u64;
+                // TODO: Get more accurate transaction cost.
+                // The current tx cost is Solana is half of 5_000 lamports, the
+                // other half is burned.
+                let minimum_profit = match mev_path.input_output_token_type {
+                    InputOutputTokenType::Sol => 2_500,
+                    InputOutputTokenType::Usdc => self.usdc_minimum_profit,
+                };
+                if profit <= minimum_profit {
+                    None
+                }
+                else if amount_in <= initial_amount {
+                    // If the the `amount_in` is less than the initial amount, return
+                    // `None`.
+                    warn!("[MEV] The output amount is less than the initial amount, this shouldn't happen");
+                    None
+                } else {
+                    let sanitized_tx_opt = swap_arguments_vec
+                        .into_iter()
+                        .collect::<Option<Vec<_>>>()
+                        .and_then(|swap_args| {
+                            Some(create_swap_tx(
+                                swap_args,
+                                blockhash,
+                                self.user_authority.as_ref().as_ref()?,
+                            ))
+                        });
+
+                    Some(MevTxOutput {
+                        sanitized_tx: sanitized_tx_opt,
+                        path_idx,
+                        input_output_pairs,
+                        profit,
+                        marginal_price: path_output.marginal_price,
+                    })
+                }
+            })
+            .collect()
     }
 }
 
@@ -565,6 +714,7 @@ fn test_log_serialization() {
             },\
             'pool_a_balance':1,\
             'pool_b_balance':1,\
+            'source_balance':null,\
             'fees':{\
               'host_fee_denominator':10,\
               'host_fee_numerator':1,\

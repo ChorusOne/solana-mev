@@ -23,6 +23,8 @@ pub struct MevConfig {
     pub mev_paths: Vec<MevPath>,
 
     pub user_authority_path: Option<PathBuf>,
+
+    pub usdc_minimum_profit: u64,
 }
 
 /// Function to use when serializing a public key, to print it using base58.
@@ -84,7 +86,7 @@ mod tests {
     use std::{path::PathBuf, str::FromStr};
 
     use crate::mev::{
-        arbitrage::{PairInfo, TradeDirection},
+        arbitrage::{InputOutputTokenType, PairInfo, TradeDirection},
         utils::B58Pubkey,
         *,
     };
@@ -95,6 +97,7 @@ mod tests {
             r#"
     log_path = '/tmp/mev.log'
     watched_programs = ['9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP']
+    usdc_minimum_profit = 0
 
     [[orca_account]]
         _id = 'USDC/USDT[stable]'
@@ -118,6 +121,7 @@ mod tests {
             { pool = "FX5UWkujjpU4yKB4yvKVEzG2Z8r2PLmLpyVmv12yqAUQ", direction = "BtoA" },
             { pool = "EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U", direction = "BtoA" },
         ]
+        input_output_token_type = 'Sol'
     "#,
         )
         .expect("Failed to deserialize");
@@ -183,7 +187,9 @@ mod tests {
                         direction: TradeDirection::BtoA,
                     },
                 ],
+                input_output_token_type: InputOutputTokenType::Sol,
             }],
+            usdc_minimum_profit: 0,
             user_authority_path: None,
         };
         assert_eq!(sample_config, expected_mev_config);

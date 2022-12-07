@@ -1,4 +1,3 @@
-use log::warn;
 use serde::Serialize;
 use solana_sdk::{
     hash::Hash,
@@ -8,12 +7,7 @@ use solana_sdk::{
     signer::Signer,
     transaction::{SanitizedTransaction, Transaction},
 };
-use spl_token_swap::{
-    curve::calculator::SwapWithoutFeesResult,
-    instruction::{Swap, SwapInstruction},
-};
-
-use crate::inline_spl_token;
+use spl_token_swap::instruction::{Swap, SwapInstruction};
 
 use super::{
     utils::{deserialize_b58, serialize_b58},
@@ -24,6 +18,12 @@ use super::{
 pub enum TradeDirection {
     AtoB,
     BtoA,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+pub enum InputOutputTokenType {
+    Sol,
+    Usdc,
 }
 
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
@@ -39,6 +39,9 @@ pub struct PairInfo {
 pub struct MevPath {
     pub name: String,
     pub path: Vec<PairInfo>,
+
+    #[serde(skip_serializing)]
+    pub input_output_token_type: InputOutputTokenType,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
@@ -67,141 +70,16 @@ pub struct MevTxOutput {
 }
 
 pub struct PathCalculationOutput {
-    optimal_input: f64,
-    marginal_price: f64,
-    source_token_balance: Option<u64>,
+    pub optimal_input: f64,
+    pub marginal_price: f64,
+    pub source_token_balance: Option<u64>,
 }
 
 impl MevPath {
-    fn get_mev_txs(
-        &self,
-        pool_states: &PoolStates,
-        user_transfer_authority: Option<&Keypair>,
-        blockhash: Hash,
-        path_idx: usize,
-    ) -> Option<MevTxOutput> {
-        let path_output = self.get_path_calculation_output(pool_states)?;
-        let initial_amount = path_output.optimal_input.floor() as u128;
-
-        let initial_amount = if let Some(source_token_balance) = path_output.source_token_balance {
-            initial_amount.min(source_token_balance as u128)
-        } else {
-            initial_amount
-        };
-        let mut amount_in = initial_amount;
-        let mut input_output_pairs = Vec::with_capacity(self.path.len());
-
-        let mut swap_arguments_vec = Vec::with_capacity(self.path.len());
-        for pair_info in &self.path {
-            let pool_state = pool_states.0.get(&pair_info.pool)?;
-
-            let trade_fee = pool_state.fees.0.trading_fee(amount_in)?;
-            let owner_fee = pool_state.fees.0.owner_trading_fee(amount_in)?;
-
-            let total_fees = trade_fee.checked_add(owner_fee)?;
-            let source_amount_less_fees = amount_in.checked_sub(total_fees)?;
-
-            let (
-                trade_direction,
-                source_pubkey,
-                swap_source_pubkey,
-                destination_pubkey,
-                swap_destination_pubkey,
-                swap_source_amount,
-                swap_destination_amount,
-            ) = match pair_info.direction {
-                TradeDirection::AtoB => (
-                    spl_token_swap::curve::calculator::TradeDirection::AtoB,
-                    pool_state.pool.source,
-                    pool_state.pool.pool_a_account,
-                    pool_state.pool.destination,
-                    pool_state.pool.pool_b_account,
-                    pool_state.pool_a_balance,
-                    pool_state.pool_b_balance,
-                ),
-                TradeDirection::BtoA => (
-                    spl_token_swap::curve::calculator::TradeDirection::BtoA,
-                    pool_state.pool.destination,
-                    pool_state.pool.pool_b_account,
-                    pool_state.pool.source,
-                    pool_state.pool.pool_a_account,
-                    pool_state.pool_b_balance,
-                    pool_state.pool_a_balance,
-                ),
-            };
-
-            // For the Constant Product Curve the `trade_direction` is
-            // ignored and it's our responsibility to provide the right
-            // token's balance from the pool.
-            let SwapWithoutFeesResult {
-                source_amount_swapped: _,
-                destination_amount_swapped,
-            } = pool_state.curve_calculator.swap_without_fees(
-                source_amount_less_fees,
-                swap_source_amount as u128,
-                swap_destination_amount as u128,
-                // Again, this argument is useless!
-                trade_direction,
-            )?;
-
-            input_output_pairs.push(InputOutputPairs {
-                token_in: amount_in as u64,
-                token_out: destination_amount_swapped as u64,
-            });
-
-            let swap_arguments = match (source_pubkey, destination_pubkey) {
-                (Some(source), Some(destination)) => Some(SwapArguments {
-                    program_id: pool_state.pool.program_id,
-                    swap_pubkey: pair_info.pool,
-                    authority_pubkey: pool_state.pool.pool_authority,
-                    source_pubkey: source,
-                    swap_source_pubkey,
-                    swap_destination_pubkey,
-                    destination_pubkey: destination,
-                    pool_mint_pubkey: pool_state.pool.pool_mint,
-                    pool_fee_pubkey: pool_state.pool.pool_fee,
-                    token_program: inline_spl_token::id(),
-                    amount_in: amount_in as u64,
-                    minimum_amount_out: 0,
-                }),
-                _ => None,
-            };
-
-            amount_in = destination_amount_swapped;
-            swap_arguments_vec.push(swap_arguments);
-        }
-
-        if amount_in <= initial_amount {
-            // If the the `amount_in` is less than the initial amount, return
-            // `None`.
-            warn!("[MEV] The output amount is less than the initial amount, this shouldn't happen");
-            None
-        } else {
-            let sanitized_tx_opt = swap_arguments_vec
-                .into_iter()
-                .collect::<Option<Vec<_>>>()
-                .and_then(|swap_args| {
-                    Some(create_swap_tx(
-                        swap_args,
-                        blockhash,
-                        user_transfer_authority?,
-                    ))
-                });
-
-            Some(MevTxOutput {
-                sanitized_tx: sanitized_tx_opt,
-                path_idx,
-                input_output_pairs,
-                profit: amount_in.saturating_sub(initial_amount) as u64,
-                marginal_price: path_output.marginal_price,
-            })
-        }
-    }
-
     /// Get (`input`, `marginal_price`), `input` is the input of the first hop
     /// of the path, and `marginal_price` is the multiplication of all fees and
     /// ratios from the path.
-    fn get_path_calculation_output(
+    pub fn get_path_calculation_output(
         &self,
         pool_states: &PoolStates,
     ) -> Option<PathCalculationOutput> {
@@ -264,37 +142,22 @@ impl MevPath {
     }
 }
 
-pub fn get_arbitrage_tx_outputs(
-    mev_paths: &[MevPath],
-    pool_states: &PoolStates,
-    user_transfer_authority: Option<&Keypair>,
-    blockhash: Hash,
-) -> Vec<MevTxOutput> {
-    mev_paths
-        .into_iter()
-        .enumerate()
-        .filter_map(|(i, path)| {
-            path.get_mev_txs(pool_states, user_transfer_authority, blockhash, i)
-        })
-        .collect()
+pub struct SwapArguments {
+    pub program_id: Pubkey,
+    pub swap_pubkey: Pubkey,
+    pub authority_pubkey: Pubkey,
+    pub source_pubkey: Pubkey,
+    pub swap_source_pubkey: Pubkey,
+    pub swap_destination_pubkey: Pubkey,
+    pub destination_pubkey: Pubkey,
+    pub pool_mint_pubkey: Pubkey,
+    pub pool_fee_pubkey: Pubkey,
+    pub token_program: Pubkey,
+    pub amount_in: u64,
+    pub minimum_amount_out: u64,
 }
 
-struct SwapArguments {
-    program_id: Pubkey,
-    swap_pubkey: Pubkey,
-    authority_pubkey: Pubkey,
-    source_pubkey: Pubkey,
-    swap_source_pubkey: Pubkey,
-    swap_destination_pubkey: Pubkey,
-    destination_pubkey: Pubkey,
-    pool_mint_pubkey: Pubkey,
-    pool_fee_pubkey: Pubkey,
-    token_program: Pubkey,
-    amount_in: u64,
-    minimum_amount_out: u64,
-}
-
-fn create_swap_tx(
+pub fn create_swap_tx(
     swap_args_vec: Vec<SwapArguments>,
     blockhash: Hash,
     user_transfer_authority: &Keypair,
@@ -343,12 +206,16 @@ fn create_swap_tx(
 
 #[cfg(test)]
 mod tests {
-    use std::{str::FromStr, sync::Arc};
+    use std::{path::PathBuf, str::FromStr, sync::Arc};
 
     use spl_token_swap::curve::constant_product::ConstantProductCurve;
+    use tempfile::NamedTempFile;
 
     use super::*;
-    use crate::mev::{Fees, OrcaPoolAddresses, OrcaPoolWithBalance, PoolStates};
+    use crate::mev::{
+        utils::{AllOrcaPoolAddresses, MevConfig},
+        Fees, Mev, MevLog, OrcaPoolAddresses, OrcaPoolWithBalance, PoolStates,
+    };
 
     #[test]
     fn test_get_arbitrage() {
@@ -485,34 +352,58 @@ mod tests {
                         .expect("stSOL/USDC"),
                     direction: TradeDirection::AtoB,
                 },
+                PairInfo {
+                    pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                        .expect("wstETH/USDC"),
+                    direction: TradeDirection::AtoB,
+                },
             ],
+            input_output_token_type: InputOutputTokenType::Sol,
         };
-        let arbs =
-            get_arbitrage_tx_outputs(&[path.clone()], &pool_states, None, Hash::new_unique());
+        let mev_config = MevConfig {
+            log_path: PathBuf::from(NamedTempFile::new().unwrap().path().to_str().unwrap()),
+            watched_programs: vec![],
+            orca_accounts: AllOrcaPoolAddresses(vec![]),
+            mev_paths: vec![path],
+            user_authority_path: None,
+            usdc_minimum_profit: 0,
+        };
+        let mev_log = MevLog::new(&mev_config);
+        let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
+        let arbs = mev.get_arbitrage_tx_outputs(&pool_states, Hash::new_unique());
         assert_eq!(arbs[0].path_idx, 0);
         assert_eq!(
             arbs[0].input_output_pairs,
             vec![
                 InputOutputPairs {
-                    token_in: 4099483579,
-                    token_out: 1799781506
+                    token_in: 161120564,
+                    token_out: 113068513
                 },
                 InputOutputPairs {
-                    token_in: 1799781506,
-                    token_out: 6479400819484
+                    token_in: 113068513,
+                    token_out: 457684827646
                 },
                 InputOutputPairs {
-                    token_in: 6479400819484,
-                    token_out: 130347150790
+                    token_in: 457684827646,
+                    token_out: 73693967608
+                },
+                InputOutputPairs {
+                    token_in: 73693967608,
+                    token_out: 6021997587
                 }
-            ]
+            ],
         );
-        assert_eq!(arbs[0].marginal_price, 1010.9851646730779);
-        assert_eq!(arbs[0].profit, 126247667211);
+        assert_eq!(arbs[0].marginal_price, 1396.9446678778877);
+        assert_eq!(arbs[0].profit, 5860877023);
 
-        let path_output = path.get_path_calculation_output(&pool_states).unwrap();
-        assert_eq!(path_output.marginal_price, 1010.9851646730779);
-        assert_eq!(path_output.optimal_input, 4099483579.109189);
+        let path_output = mev
+            .mev_paths
+            .first()
+            .unwrap()
+            .get_path_calculation_output(&pool_states)
+            .unwrap();
+        assert_eq!(path_output.marginal_price, 1396.9446678778877);
+        assert_eq!(path_output.optimal_input, 161120564.59526825);
 
         pool_states
             .0
@@ -545,9 +436,13 @@ mod tests {
             .unwrap()
             .pool_a_balance = 1384360183450;
 
-        let path_output = path.get_path_calculation_output(&pool_states);
+        let path_output = mev
+            .mev_paths
+            .first()
+            .unwrap()
+            .get_path_calculation_output(&pool_states);
         assert!(path_output.is_none());
-        let arbs = get_arbitrage_tx_outputs(&[path], &pool_states, None, Hash::new_unique());
+        let arbs = mev.get_arbitrage_tx_outputs(&pool_states, Hash::new_unique());
         assert!(arbs.is_empty());
     }
 
@@ -582,6 +477,7 @@ mod tests {
                     direction: TradeDirection::BtoA,
                 },
             ],
+            input_output_token_type: InputOutputTokenType::Sol,
         };
         let expected_result = "{\
             'name':'SOL->USDC->wstETH->stSOL->stSOL->USDC->SOL',\
@@ -636,7 +532,17 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let arbs = get_arbitrage_tx_outputs(&vec![], &pool_states, None, Hash::new_unique());
+        let mev_config = MevConfig {
+            log_path: PathBuf::from(NamedTempFile::new().unwrap().path().to_str().unwrap()),
+            watched_programs: vec![],
+            orca_accounts: AllOrcaPoolAddresses(vec![]),
+            mev_paths: vec![],
+            user_authority_path: None,
+            usdc_minimum_profit: 0,
+        };
+        let mev_log = MevLog::new(&mev_config);
+        let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
+        let arbs = mev.get_arbitrage_tx_outputs(&pool_states, Hash::new_unique());
         assert!(arbs.is_empty());
     }
 
@@ -717,42 +623,6 @@ mod tests {
                         source_balance: None,
                     },
                 ),
-                (
-                    Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL").unwrap(),
-                    OrcaPoolWithBalance {
-                        pool: OrcaPoolAddresses {
-                            program_id: Pubkey::from_str(
-                                "9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP",
-                            )
-                            .unwrap(),
-                            address: Pubkey::from_str(
-                                "EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL",
-                            )
-                            .unwrap(),
-                            pool_a_account: Pubkey::new_unique(),
-                            pool_b_account: Pubkey::new_unique(),
-                            source: None,
-                            destination: None,
-                            pool_mint: Pubkey::new_unique(),
-                            pool_fee: Pubkey::new_unique(),
-                            pool_authority: Pubkey::default(),
-                        },
-                        pool_a_balance: 400881658679,
-                        pool_b_balance: 138436018345,
-                        fees: Fees(spl_token_swap::curve::fees::Fees {
-                            trade_fee_numerator: 25,
-                            trade_fee_denominator: 10_000,
-                            owner_trade_fee_numerator: 5,
-                            owner_trade_fee_denominator: 10_000,
-                            owner_withdraw_fee_numerator: 0,
-                            owner_withdraw_fee_denominator: 1,
-                            host_fee_numerator: 0,
-                            host_fee_denominator: 1,
-                        }),
-                        curve_calculator,
-                        source_balance: None,
-                    },
-                ),
             ]
             .into_iter()
             .collect(),
@@ -772,41 +642,126 @@ mod tests {
                         direction: TradeDirection::BtoA,
                     },
                     PairInfo {
-                        pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                        pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
                             .expect("stSOL/USDC"),
                         direction: TradeDirection::AtoB,
                     },
                 ],
+                input_output_token_type: InputOutputTokenType::Sol,
             },
             MevPath {
                 name: "stSOL->USDC".to_owned(),
-                path: vec![PairInfo {
-                    pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
-                        .expect("stSOL/USDC"),
-                    direction: TradeDirection::AtoB,
-                }],
+                path: vec![
+                    PairInfo {
+                        pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                            .expect("stSOL/USDC"),
+                        direction: TradeDirection::AtoB,
+                    },
+                    PairInfo {
+                        pool: Pubkey::from_str("EfK84vYEKT1PoTJr6fBVKFbyA7ZoftfPo2LQPAJG1exL")
+                            .expect("stSOL/USDC"),
+                        direction: TradeDirection::BtoA,
+                    },
+                ],
+                input_output_token_type: InputOutputTokenType::Sol,
             },
         ];
-        let arbs = get_arbitrage_tx_outputs(&paths, &pool_states, None, Hash::new_unique());
+
+        let mev_config = MevConfig {
+            log_path: PathBuf::from(NamedTempFile::new().unwrap().path().to_str().unwrap()),
+            watched_programs: vec![],
+            orca_accounts: AllOrcaPoolAddresses(vec![]),
+            mev_paths: paths,
+            user_authority_path: None,
+            usdc_minimum_profit: 0,
+        };
+        let mev_log = MevLog::new(&mev_config);
+        let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
+
+        let arbs = mev.get_arbitrage_tx_outputs(&pool_states, Hash::new_unique());
         assert_eq!(arbs[0].path_idx, 0);
         assert_eq!(
             arbs[0].input_output_pairs,
             vec![
                 InputOutputPairs {
-                    token_in: 4099483579,
-                    token_out: 1799781506
+                    token_in: 98872179,
+                    token_out: 70047451
                 },
                 InputOutputPairs {
-                    token_in: 1799781506,
-                    token_out: 6479400819484
+                    token_in: 70047451,
+                    token_out: 284444168993
                 },
                 InputOutputPairs {
-                    token_in: 6479400819484,
-                    token_out: 130347150790
+                    token_in: 284444168993,
+                    token_out: 6297956773
                 }
             ]
         );
-        assert_eq!(arbs[0].marginal_price, 1010.9851646730779);
-        assert_eq!(arbs[0].profit, 126247667211);
+        assert_eq!(arbs[0].marginal_price, 4057.4309055877143);
+        assert_eq!(arbs[0].profit, 6199084594);
+    }
+
+    #[test]
+    #[should_panic]
+    fn invalid_path_should_panic() {
+        let paths = vec![MevPath {
+            name: "stETH->USDC->wstETH".to_owned(),
+            path: vec![
+                PairInfo {
+                    pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                        .expect("wstETH/USDC"),
+                    direction: TradeDirection::BtoA,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("B32UuhPSp6srSBbRTh4qZNjkegsehY9qXTwQgnPWYMZy")
+                        .expect("stSOL/wstETH"),
+                    direction: TradeDirection::BtoA,
+                },
+            ],
+            input_output_token_type: InputOutputTokenType::Sol,
+        }];
+
+        let mev_config = MevConfig {
+            log_path: PathBuf::from(NamedTempFile::new().unwrap().path().to_str().unwrap()),
+            watched_programs: vec![],
+            orca_accounts: AllOrcaPoolAddresses(vec![]),
+            mev_paths: paths,
+            user_authority_path: None,
+            usdc_minimum_profit: 0,
+        };
+        let mev_log = MevLog::new(&mev_config);
+        let _mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
+    }
+
+    #[test]
+    #[should_panic]
+    fn path_with_one_pool_with_same_direction_should_panic() {
+        let paths = vec![MevPath {
+            name: "stETH->USDC->wstETH".to_owned(),
+            path: vec![
+                PairInfo {
+                    pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                        .expect("wstETH/USDC"),
+                    direction: TradeDirection::BtoA,
+                },
+                PairInfo {
+                    pool: Pubkey::from_str("v51xWrRwmFVH6EKe8eZTjgK5E4uC2tzY5sVt5cHbrkG")
+                        .expect("wstETH/USDC"),
+                    direction: TradeDirection::BtoA,
+                },
+            ],
+            input_output_token_type: InputOutputTokenType::Sol,
+        }];
+
+        let mev_config = MevConfig {
+            log_path: PathBuf::from(NamedTempFile::new().unwrap().path().to_str().unwrap()),
+            watched_programs: vec![],
+            orca_accounts: AllOrcaPoolAddresses(vec![]),
+            mev_paths: paths,
+            user_authority_path: None,
+            usdc_minimum_profit: 0,
+        };
+        let mev_log = MevLog::new(&mev_config);
+        let _mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
     }
 }
