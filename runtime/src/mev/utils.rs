@@ -184,7 +184,7 @@ mod tests {
                 ],
             }],
             user_authority_path: None,
-            minimum_profit: vec![],
+            minimum_profit: HashMap::new(),
         };
         assert_eq!(sample_config, expected_mev_config);
     }
