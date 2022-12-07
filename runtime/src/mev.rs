@@ -39,8 +39,8 @@ use crate::{
 
 use self::{
     arbitrage::{
-        create_swap_tx, InputOutputPairs, InputOutputTokenType, MevOpportunityWithInput, MevPath,
-        MevTxOutput, SwapArguments, TradeDirection,
+        create_swap_tx, InputOutputPairs, MevOpportunityWithInput, MevPath, MevTxOutput,
+        SwapArguments, TradeDirection,
     },
     utils::{deserialize_opt_b58, serialize_opt_b58, AllOrcaPoolAddresses, MevConfig},
 };
@@ -72,8 +72,9 @@ pub struct Mev {
     // If `None`, we do not try to craft MEV txs.
     pub user_authority: Arc<Option<Keypair>>,
 
-    // Minimum profit to execute MEV transactions with the USDC token.
-    pub usdc_minimum_profit: u64,
+    // A mapping with the minimum profit to execute MEV transactions token per
+    // token address.
+    pub minimum_profit: HashMap<Pubkey, u64>,
 }
 
 #[derive(Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -273,7 +274,11 @@ path that starts with address {} finishes at address \
                 Keypair::from_bytes(&secret_key_bytes)
                     .expect("[MEV] Could not generate Keypair from path")
             })),
-            usdc_minimum_profit: config.usdc_minimum_profit,
+            minimum_profit: config
+                .minimum_profit
+                .into_iter()
+                .map(|(b58_pubkey, min)| (b58_pubkey.0, min))
+                .collect(),
         }
     }
 
@@ -307,9 +312,9 @@ path that starts with address {} finishes at address \
 
     /// Attempts to deserialize the Orca accounts MEV is interested in,
     /// in case the deserialization fails for some reason, returns the error.
-    pub fn get_all_orca_monitored_accounts<'a>(
+    pub fn get_all_orca_monitored_accounts(
         &self,
-        loaded_transaction: &'a LoadedTransaction,
+        loaded_transaction: &LoadedTransaction,
     ) -> Option<Result<PoolStates, ProgramError>> {
         let pool_states = loaded_transaction
             .mev_accounts
@@ -320,7 +325,7 @@ path that starts with address {} finishes at address \
                     .iter()
                     .map(|mev_account| {
                         let get_account =
-                            |pubkey: &'a Pubkey| match &mev_accounts.pubkey_account_map[pubkey] {
+                            |pubkey: &Pubkey| match &mev_accounts.pubkey_account_map[pubkey] {
                                 Idx(idx) => &loaded_transaction.accounts[*idx],
                                 ReadAccount(acc) => &acc,
                             };
@@ -543,17 +548,23 @@ path that starts with address {} finishes at address \
                 }
 
                 let profit = amount_in.saturating_sub(initial_amount) as u64;
-                // TODO: Get more accurate transaction cost.
-                // The current tx cost is Solana is half of 5_000 lamports, the
-                // other half is burned.
-                let minimum_profit = match mev_path.input_output_token_type {
-                    InputOutputTokenType::Sol => 2_500,
-                    InputOutputTokenType::Usdc => self.usdc_minimum_profit,
+                let first_pair_info = mev_path.path.first()?;
+                let mint_pubkey = match first_pair_info.direction {
+                    TradeDirection::AtoB => pool_states.0.get(&first_pair_info.pool)?.pool.pool_a_mint,
+                    TradeDirection::BtoA => pool_states.0.get(&first_pair_info.pool)?.pool.pool_b_mint,
                 };
+
+                let minimum_profit = match self.minimum_profit.get(&mint_pubkey) {
+                    Some(min_profit) => *min_profit,
+                    None => {
+                        warn!("[MEV] Token {} does not have a minimum profit set from config file.", mint_pubkey);
+                        0u64
+                    },
+                };
+
                 if profit <= minimum_profit {
                     None
-                }
-                else if amount_in <= initial_amount {
+                } else if amount_in <= initial_amount {
                     // If the the `amount_in` is less than the initial amount, return
                     // `None`.
                     warn!("[MEV] The output amount is less than the initial amount, this shouldn't happen");
