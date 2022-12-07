@@ -167,7 +167,7 @@ pub struct BankingStageStats {
     transaction_processing_elapsed: AtomicU64,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum TransactionBatchType {
     Normal,
     Mev,
