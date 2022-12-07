@@ -20,12 +20,6 @@ pub enum TradeDirection {
     BtoA,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
-pub enum InputOutputTokenType {
-    Sol,
-    Usdc,
-}
-
 #[derive(Debug, PartialEq, Clone, Deserialize, Serialize)]
 pub struct PairInfo {
     #[serde(serialize_with = "serialize_b58")]
@@ -39,9 +33,6 @@ pub struct PairInfo {
 pub struct MevPath {
     pub name: String,
     pub path: Vec<PairInfo>,
-
-    #[serde(skip_serializing)]
-    pub input_output_token_type: InputOutputTokenType,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize)]
@@ -340,7 +331,6 @@ mod tests {
                     direction: TradeDirection::AtoB,
                 },
             ],
-            input_output_token_type: InputOutputTokenType::Sol,
         };
         let mev_config = MevConfig {
             log_path: PathBuf::from(NamedTempFile::new().unwrap().path().to_str().unwrap()),
@@ -348,7 +338,7 @@ mod tests {
             orca_accounts: AllOrcaPoolAddresses(vec![]),
             mev_paths: vec![path],
             user_authority_path: None,
-            usdc_minimum_profit: 0,
+            minimum_profit: vec![],
         };
         let mev_log = MevLog::new(&mev_config);
         let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
@@ -459,7 +449,6 @@ mod tests {
                     direction: TradeDirection::BtoA,
                 },
             ],
-            input_output_token_type: InputOutputTokenType::Sol,
         };
         let expected_result = "{\
             'name':'SOL->USDC->wstETH->stSOL->stSOL->USDC->SOL',\
@@ -514,7 +503,7 @@ mod tests {
             orca_accounts: AllOrcaPoolAddresses(vec![]),
             mev_paths: vec![],
             user_authority_path: None,
-            usdc_minimum_profit: 0,
+            minimum_profit: vec![],
         };
         let mev_log = MevLog::new(&mev_config);
         let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
@@ -611,7 +600,6 @@ mod tests {
                         direction: TradeDirection::AtoB,
                     },
                 ],
-                input_output_token_type: InputOutputTokenType::Sol,
             },
             MevPath {
                 name: "stSOL->USDC".to_owned(),
@@ -627,7 +615,6 @@ mod tests {
                         direction: TradeDirection::BtoA,
                     },
                 ],
-                input_output_token_type: InputOutputTokenType::Sol,
             },
         ];
 
@@ -637,7 +624,7 @@ mod tests {
             orca_accounts: AllOrcaPoolAddresses(vec![]),
             mev_paths: paths,
             user_authority_path: None,
-            usdc_minimum_profit: 0,
+            minimum_profit: vec![],
         };
         let mev_log = MevLog::new(&mev_config);
         let mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
@@ -682,7 +669,6 @@ mod tests {
                     direction: TradeDirection::BtoA,
                 },
             ],
-            input_output_token_type: InputOutputTokenType::Sol,
         }];
 
         let mev_config = MevConfig {
@@ -691,7 +677,7 @@ mod tests {
             orca_accounts: AllOrcaPoolAddresses(vec![]),
             mev_paths: paths,
             user_authority_path: None,
-            usdc_minimum_profit: 0,
+            minimum_profit: vec![],
         };
         let mev_log = MevLog::new(&mev_config);
         let _mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
@@ -714,7 +700,6 @@ mod tests {
                     direction: TradeDirection::BtoA,
                 },
             ],
-            input_output_token_type: InputOutputTokenType::Sol,
         }];
 
         let mev_config = MevConfig {
@@ -723,7 +708,7 @@ mod tests {
             orca_accounts: AllOrcaPoolAddresses(vec![]),
             mev_paths: paths,
             user_authority_path: None,
-            usdc_minimum_profit: 0,
+            minimum_profit: vec![],
         };
         let mev_log = MevLog::new(&mev_config);
         let _mev = Mev::new(mev_log.log_send_channel.clone(), mev_config);
