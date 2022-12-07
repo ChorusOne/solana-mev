@@ -562,7 +562,7 @@ path that starts with address {} finishes at address \
                     },
                 };
 
-                if profit <= minimum_profit {
+                if profit < minimum_profit {
                     None
                 } else if amount_in <= initial_amount {
                     // If the the `amount_in` is less than the initial amount, return
