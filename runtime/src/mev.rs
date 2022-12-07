@@ -245,14 +245,6 @@ impl Mev {
                     if pair_a == pair_b {
                         panic!("MEV paths should not end in the same pool with the same direction of trade")
                     }
-                    if pair_a.pool != pair_b.pool {
-                        panic!(
-                            "MEV paths should start and end at the same pool, \
-path that starts with address {} finishes at address \
-{}",
-                            pair_a.pool, pair_b.pool
-                        );
-                    }
                     path
                 }
             })
