@@ -97,7 +97,7 @@ mod tests {
             r#"
     log_path = '/tmp/mev.log'
     watched_programs = ['9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP']
-    minimum_profit = []
+    minimum_profit = {}
 
     [[orca_account]]
         _id = 'USDC/USDT[stable]'

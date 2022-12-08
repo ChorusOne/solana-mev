@@ -723,6 +723,7 @@ fn test_log_serialization() {
                     }),
                     curve_calculator,
                     source_balance: None,
+                    destination_balance: None,
                 },
             )]
             .into_iter()
@@ -750,6 +751,7 @@ fn test_log_serialization() {
             'pool_a_balance':1,\
             'pool_b_balance':1,\
             'source_balance':null,\
+            'destination_balance':null,\
             'fees':{\
               'host_fee_denominator':10,\
               'host_fee_numerator':1,\
