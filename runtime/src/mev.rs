@@ -141,6 +141,7 @@ pub struct OrcaPoolWithBalance {
     pool_a_balance: u64,
     pool_b_balance: u64,
     source_balance: Option<u64>,
+    destination_balance: Option<u64>,
     fees: Fees,
 
     #[serde(skip_serializing)]
@@ -353,10 +354,19 @@ impl Mev {
                             })
                             .transpose()?;
 
-                        let pool_destination_pubkey = mev_account
+                        let pool_destination_pubkey_amount = mev_account
                             .destination
                             .as_ref()
-                            .map(|dst| get_account(dst).0);
+                            .map(|dst| {
+                                let (destination_pubkey, destination_account) = get_account(dst);
+                                let spl_acc =
+                                    spl_token::state::Account::unpack(destination_account.data())?;
+                                Ok::<(&solana_sdk::pubkey::Pubkey, u64), ProgramError>((
+                                    destination_pubkey,
+                                    spl_acc.amount,
+                                ))
+                            })
+                            .transpose()?;
 
                         let pool_mint_pubkey = get_account(&mev_account.pool_mint).0;
                         let pool_fee_pubkey = get_account(&mev_account.pool_fee).0;
@@ -370,7 +380,8 @@ impl Mev {
                                     pool_a_account: pool_a_acc.0,
                                     pool_b_account: pool_b_acc.0,
                                     source: pool_source_pubkey_amount.map(|(src, _amount)| *src),
-                                    destination: pool_destination_pubkey,
+                                    destination: pool_destination_pubkey_amount
+                                        .map(|(dst, _amount)| *dst),
                                     pool_mint: pool_mint_pubkey,
                                     pool_fee: pool_fee_pubkey,
                                     pool_authority: pool_authority,
@@ -383,6 +394,8 @@ impl Mev {
                                 curve_calculator: pool.swap_curve().calculator.clone(),
                                 source_balance: pool_source_pubkey_amount
                                     .map(|(_src, amount)| amount),
+                                destination_balance: pool_destination_pubkey_amount
+                                    .map(|(_dst, amount)| amount),
                             },
                         ))
                     })
@@ -451,11 +464,20 @@ impl Mev {
                 let path_output = mev_path.get_path_calculation_output(pool_states)?;
                 let initial_amount = path_output.optimal_input.floor() as u128;
 
-                let initial_amount = if let Some(source_token_balance) = path_output.source_token_balance {
+                let first_pair_info = mev_path.path.first()?;
+
+                // Check the balance of which token initiates the path.
+                let initial_source_amount_opt = match first_pair_info.direction {
+                    TradeDirection::AtoB => pool_states.0.get(&first_pair_info.pool)?.source_balance,
+                    TradeDirection::BtoA => pool_states.0.get(&first_pair_info.pool)?.destination_balance,
+                };
+
+                let initial_amount = if let Some(source_token_balance) = initial_source_amount_opt {
                     initial_amount.min(source_token_balance as u128)
                 } else {
                     initial_amount
                 };
+
                 let mut amount_in = initial_amount;
                 let mut input_output_pairs = Vec::with_capacity(mev_path.path.len());
 
@@ -540,7 +562,6 @@ impl Mev {
                 }
 
                 let profit = amount_in.saturating_sub(initial_amount) as u64;
-                let first_pair_info = mev_path.path.first()?;
                 let mint_pubkey = match first_pair_info.direction {
                     TradeDirection::AtoB => pool_states.0.get(&first_pair_info.pool)?.pool.pool_a_mint,
                     TradeDirection::BtoA => pool_states.0.get(&first_pair_info.pool)?.pool.pool_b_mint,
