@@ -241,6 +241,7 @@ mod tests {
                         }),
                         curve_calculator: curve_calculator.clone(),
                         source_balance: None,
+                        destination_balance: None,
                     },
                 ),
                 (
@@ -271,6 +272,7 @@ mod tests {
                         }),
                         curve_calculator: curve_calculator.clone(),
                         source_balance: None,
+                        destination_balance: None,
                     },
                 ),
                 (
@@ -301,6 +303,7 @@ mod tests {
                         }),
                         curve_calculator,
                         source_balance: None,
+                        destination_balance: None,
                     },
                 ),
             ]
@@ -483,6 +486,7 @@ mod tests {
                     }),
                     curve_calculator,
                     source_balance: None,
+                    destination_balance: None,
                 },
             )]
             .into_iter()
@@ -535,6 +539,7 @@ mod tests {
                         }),
                         curve_calculator: curve_calculator.clone(),
                         source_balance: None,
+                        destination_balance: None,
                     },
                 ),
                 (
@@ -565,6 +570,7 @@ mod tests {
                         }),
                         curve_calculator: curve_calculator.clone(),
                         source_balance: None,
+                        destination_balance: None,
                     },
                 ),
                 (
@@ -595,6 +601,7 @@ mod tests {
                         }),
                         curve_calculator,
                         source_balance: None,
+                        destination_balance: None,
                     },
                 ),
             ]
