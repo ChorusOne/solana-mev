@@ -189,6 +189,7 @@ d_data = {
     'log_path': '/tmp/mev.log',
     'watched_programs': [token_swap_program_id],
     'user_authority_path': miner_authority_key.keypair_path,
+    'minimum_profit': {token_mint_keypairs[1].pubkey: 0},
     'orca_account': [
         {
             '_id': 'P0: Token0, Token1',
