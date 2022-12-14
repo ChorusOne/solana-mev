@@ -561,6 +561,11 @@ impl Mev {
                     swap_arguments_vec.push(swap_arguments);
                 }
 
+                // Prevent making transactions that result in a loss.
+                if let Some(Some(last_arg)) = swap_arguments_vec.last_mut() {
+                    last_arg.minimum_amount_out = initial_amount as u64;
+                }
+
                 let profit = amount_in.saturating_sub(initial_amount) as u64;
                 let mint_pubkey = match first_pair_info.direction {
                     TradeDirection::AtoB => pool_states.0.get(&first_pair_info.pool)?.pool.pool_a_mint,
@@ -577,7 +582,7 @@ impl Mev {
 
                 if profit < minimum_profit {
                     None
-                } else if amount_in <= initial_amount {
+                } else if amount_in < initial_amount {
                     // If the the `amount_in` is less than the initial amount, return
                     // `None`.
                     warn!("[MEV] The output amount is less than the initial amount, this shouldn't happen");
