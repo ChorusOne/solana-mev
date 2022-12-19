@@ -20,9 +20,63 @@ drop-in replacement for the upstream validator.
 
 [talk]: https://www.youtube.com/watch?v=nTEnpuDHz3w&t=6198s
 
+## Status
+
+Chorus One has developed this prototype as a proof of concept. Currently it is
+able to take arbitrage opportunities on Orca non-concentrated-liquidity pools.
+However, with the current trading volume on Solana, developing Solana-MEV is not
+sustaintable. Even if we were to cover the majority of Solana AMMs, as of
+December 2022, a validator with ~1% of leader slots would extract only a few
+dollars per day.
+
+At this point, Chorus One does not plan to actively invest resources in
+developing Solana-MEV further. We do hope that our prototype can serve as
+evidence that a centralized marketplace is not a technical prerequisite for MEV
+extraction, and we hope to get a discussion started around possible MEV
+architectures on Solana to ensure that MEV benefits the entire community.
+
 ## Details
 
 TODO: Write more about how it works.
+
+## Comparison to alternatives
+
+Compared to [jito-solana][jito-solana], Solana-MEV differs in a few key aspects:
+
+ * **No central server.** Solana-MEV does not introduce new connections to
+   third party servers, everything happens inside the validator.
+ * **No mempool.** Solana-MEV does not buffer transactions. It inserts its own
+   transactions in between user transactions, but it does not change the way in
+   which user transactions are processed. This also means that Solana-MEV has
+   virtually zero latency impact. (In contrast to Jito, which introduces several
+   additional network hops in the transaction processing path.)
+ * **No transaction reordering.** Solana-MEV processes transactions in the same
+   order as upstream Solana. It does not buffer transactions, so it has no way
+   to reorder; it only inserts its own transactions in between user
+   transactions.
+ * **Built-in searcher.** Solana-MEV does not rely on external searchers for
+   identifying MEV opportunities, it has a few basic strategies built-in. A
+   limitation of this is that the strategies are not as advanced as those of a
+   dedicated searcher, and Solana-MEV cannot respond as quickly to changes in
+   the ecosystem (e.g. the launch of a new AMM).
+
+Despite the differences, Solana-MEV and Jito are not incompatible, they are
+complementary. Jito’s patches stream groups of entries (parts of a block) to the
+validator (TODO: terminology), while Solana-MEV generates those internally based
+on the ones it saw before. There is no fundamental technical barrier to
+combining the two sources, however it is unclear what the marginal benefit is.
+
+[jito-solana]: https://github.com/jito-foundation/jito-solana
+
+## Reward distribution
+
+The MEV module generates transactions that increase the balance of the SPL token
+accounts owned by the _MEV Authority_ (see also the configuration section
+below). Currently no mechanism is implemented to share those proceeds further.
+In the case of a staking pool such as [Lido][lido], one simple way to share the
+rewards would be to transfer any excess balance to the pool’s reserve.
+
+[lido]: https://solana.lido.fi/
 
 ## Configuration
 
@@ -35,13 +89,13 @@ schema:
 # File to log details about MEV opportunities and AMM pools to.
 log_path = '/path/to/mev.log'
 
-# Programs to watch for interactions. After a user transaction interactis with
+# Programs to watch for interactions. After a user transaction interacts with
 # one of these programs, we check for MEV opportunities afterwards.
 watched_programs = [
-  # Orca Swap v2
-  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP',
   # Orca Swap v1
   'DjVE6JNiYqPL2QXyCUUh8rNjHrbz9hXHNYt99MQ59qw1',
+  # Orca Swap v2
+  '9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP',
 ]
 
 # Path to the keypair of the "MEV Authority". This address is the owner of all
@@ -65,7 +119,9 @@ user_authority_path = '/path/to/keypair.json'
 "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" = 101  # 0.000_101 USDC
 
 # Next are the paths that we want to consider. A path is a sequence of Orca
-# pools that should form a cycle.
+# pools that should form a cycle. Note, due to the transaction size limit on
+# Solana, it is generally not possible to use cycles of more than three hops,
+# because they would need to reference too many accounts.
 [[mev_path]]
 name = "USDC->wstETH->stSOL->USDC"
 path = [
@@ -86,16 +142,14 @@ pool_fee = "7nxYhYUaD7og4rYce263CCPh9pPTnGixfBtQrXE7UUvZ"
 # If we want to also extract MEV and not only monitor for opportunities, we also
 # need to provide the addresses of SPL associated token accounts, owned by the
 # MEV authority defined earlier, for token A and token B. These are called
-# "source" and "destination" respectively, though the rolves can be reversed if
-# the pool is used in BtoA swap direction.
+# "source" and "destination" respectively, though the roles can be reversed if
+# the pool is used with the BtoA swap direction.
 source = "..."
 destination = "..."
 ```
 
 ## License
 
-Our modifications are licensed under the Apache 2.0 license, just like the
-original Solana validator.
-
-As stated in the license, Chorus One is not liable for damages that result from
-using this software.
+Our modifications are licensed under the Apache 2.0 license like the original
+Solana validator. As stated in the license, Chorus One is not liable for damages
+that result from using this software.
