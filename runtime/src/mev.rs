@@ -481,7 +481,7 @@ impl Mev {
                 let mut amount_in = initial_amount;
                 let mut input_output_pairs = Vec::with_capacity(mev_path.path.len());
 
-                let mut swap_arguments_vec = Vec::with_capacity(mev_path.path.len());
+                let mut swap_arguments_vec: Vec<std::option::Option<SwapArguments>> = Vec::with_capacity(mev_path.path.len());
                 for pair_info in &mev_path.path {
                     let pool_state = pool_states.0.get(&pair_info.pool)?;
 
@@ -557,11 +557,21 @@ impl Mev {
                         _ => None,
                     };
 
+                    // If we are going to put `amount_in` in into this swap,
+                    // then the previous swap should have produced at least that
+                    // amount. Without this, we might make a profit in one token,
+                    // but at the cost of a loss in another token.
+                    if let Some(Some(last_arg)) = swap_arguments_vec.last_mut() {
+                        last_arg.minimum_amount_out = amount_in as u64;
+                    }
+
                     amount_in = destination_amount_swapped;
                     swap_arguments_vec.push(swap_arguments);
                 }
 
-                // Prevent making transactions that result in a loss.
+                // For the final swap, set min_out such that the combination of
+                // all swaps does not make a loss, i.e. we get at least as much
+                // out as we started with.
                 if let Some(Some(last_arg)) = swap_arguments_vec.last_mut() {
                     last_arg.minimum_amount_out = initial_amount as u64;
                 }
