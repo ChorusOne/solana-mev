@@ -481,7 +481,7 @@ impl Mev {
                 let mut amount_in = initial_amount;
                 let mut input_output_pairs = Vec::with_capacity(mev_path.path.len());
 
-                let mut swap_arguments_vec = Vec::with_capacity(mev_path.path.len());
+                let mut swap_arguments_vec: Vec<SwapArguments> = Vec::with_capacity(mev_path.path.len());
                 for pair_info in &mev_path.path {
                     let pool_state = pool_states.0.get(&pair_info.pool)?;
 
@@ -539,40 +539,42 @@ impl Mev {
                         token_out: destination_amount_swapped as u64,
                     });
 
-                    let swap_arguments = match (source_pubkey, destination_pubkey) {
-                        (Some(source), Some(destination)) => Some(SwapArguments {
-                            program_id: pool_state.pool.program_id,
-                            swap_pubkey: pair_info.pool,
-                            authority_pubkey: pool_state.pool.pool_authority,
-                            source_pubkey: source,
-                            swap_source_pubkey,
-                            swap_destination_pubkey,
-                            destination_pubkey: destination,
-                            pool_mint_pubkey: pool_state.pool.pool_mint,
-                            pool_fee_pubkey: pool_state.pool.pool_fee,
-                            token_program: inline_spl_token::id(),
-                            amount_in: amount_in as u64,
-                            minimum_amount_out: 0,
-                        }),
-                        _ => None,
+                    match (source_pubkey, destination_pubkey) {
+                        (Some(source), Some(destination)) => {
+                            let swap_args = SwapArguments {
+                                program_id: pool_state.pool.program_id,
+                                swap_pubkey: pair_info.pool,
+                                authority_pubkey: pool_state.pool.pool_authority,
+                                source_pubkey: source,
+                                swap_source_pubkey,
+                                swap_destination_pubkey,
+                                destination_pubkey: destination,
+                                pool_mint_pubkey: pool_state.pool.pool_mint,
+                                pool_fee_pubkey: pool_state.pool.pool_fee,
+                                token_program: inline_spl_token::id(),
+                                amount_in: amount_in as u64,
+                                minimum_amount_out: 0,
+                            };
+
+                            // If we are going to put `amount_in` in into this swap,
+                            // then the previous swap should have produced at least that
+                            // amount. Without this, we might make a profit in one token,
+                            // but at the cost of a loss in another token.
+                            if let Some(last_arg) = swap_arguments_vec.last_mut() {
+                                last_arg.minimum_amount_out = amount_in as u64;
+                            }
+                            swap_arguments_vec.push(swap_args);
+                        }
+                        _ => {}
                     };
 
-                    // If we are going to put `amount_in` in into this swap,
-                    // then the previous swap should have produced at least that
-                    // amount. Without this, we might make a profit in one token,
-                    // but at the cost of a loss in another token.
-                    if let Some(Some(last_arg)) = swap_arguments_vec.last_mut() {
-                        last_arg.minimum_amount_out = amount_in as u64;
-                    }
-
                     amount_in = destination_amount_swapped;
-                    swap_arguments_vec.push(swap_arguments);
                 }
 
                 // For the final swap, set min_out such that the combination of
                 // all swaps does not make a loss, i.e. we get at least as much
                 // out as we started with.
-                if let Some(Some(last_arg)) = swap_arguments_vec.last_mut() {
+                if let Some(last_arg) = swap_arguments_vec.last_mut() {
                     last_arg.minimum_amount_out = initial_amount as u64;
                 }
 
@@ -598,16 +600,16 @@ impl Mev {
                     warn!("[MEV] The output amount is less than the initial amount, this shouldn't happen");
                     None
                 } else {
-                    let sanitized_tx_opt = swap_arguments_vec
-                        .into_iter()
-                        .collect::<Option<Vec<_>>>()
-                        .and_then(|swap_args| {
-                            Some(create_swap_tx(
-                                swap_args,
-                                blockhash,
-                                self.user_authority.as_ref().as_ref()?,
-                            ))
-                        });
+                    // Construct the transaction only if we have swaps for the entire path.
+                    let sanitized_tx_opt = if swap_arguments_vec.len() == mev_path.path.len() {
+                        Some(create_swap_tx(
+                            swap_arguments_vec,
+                            blockhash,
+                            self.user_authority.as_ref().as_ref()?,
+                        ))
+                    } else {
+                        None
+                    };
 
                     Some(MevTxOutput {
                         sanitized_tx: sanitized_tx_opt,
