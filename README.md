@@ -6,7 +6,7 @@ Running this validator instead of the upstream one can generate a small amount
 of additional income.
 
 **Warning:** This is a proof of concept. [Chorus One][c1] has used it in
-production for several weeks, but it is not at a level of polish where it is a
+production for several months, but it is not at a level of polish where it is a
 drop-in replacement for the upstream validator.
 
 [upstream]: https://github.com/solana-labs/solana
@@ -48,8 +48,8 @@ Compared to [jito-solana][jito-solana], Solana-MEV differs in a few key aspects:
  * **No mempool.** Solana-MEV does not buffer transactions. It inserts its own
    transactions in between user transactions, but it does not change the way in
    which user transactions are processed. This also means that Solana-MEV has
-   virtually zero latency impact. (In contrast to Jito, which introduces several
-   additional network hops in the transaction processing path.)
+   virtually zero latency impact compared to Jito, which introduces several
+   additional network hops in the transaction processing path.
  * **No transaction reordering.** Solana-MEV processes transactions in the same
    order as upstream Solana. It does not buffer transactions, so it has no way
    to reorder; it only inserts its own transactions in between user
@@ -62,9 +62,9 @@ Compared to [jito-solana][jito-solana], Solana-MEV differs in a few key aspects:
 
 Despite the differences, Solana-MEV and Jito are not incompatible, they are
 complementary. Jito’s patches stream groups of entries (parts of a block) to the
-validator (TODO: terminology), while Solana-MEV generates those internally based
-on the ones it saw before. There is no fundamental technical barrier to
-combining the two sources, however it is unclear what the marginal benefit is.
+validator, while Solana-MEV generates those internally based on the ones it saw
+before. There is no fundamental technical barrier to combining the two sources,
+however it is unclear what the marginal benefit is.
 
 [jito-solana]: https://github.com/jito-foundation/jito-solana
 
@@ -147,6 +147,17 @@ pool_fee = "7nxYhYUaD7og4rYce263CCPh9pPTnGixfBtQrXE7UUvZ"
 source = "..."
 destination = "..."
 ```
+
+## Future work
+
+ * For technical reasons, inserting the MEV-extracting `Entry` currently does
+   not happen atomically — it is not guaranteed that the entry lands directly
+   after the one that created the opportunity. Doing so is possible, but
+   requires more invasive changes to the codebase that would make the diff more
+   difficult to maintain. Solana-MEV _does_ ensure that it does not include
+   transactions that would make a loss, nor transactions that fail.
+ * Currently Solana-MEV only observes Orca non-concentrated-liquidity pools,
+   a logical next step would be to watch concentrated liquidity pools as well.
 
 ## License
 
