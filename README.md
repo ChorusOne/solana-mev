@@ -37,7 +37,17 @@ architectures on Solana to ensure that MEV benefits the entire community.
 
 ## Details
 
-TODO: Write more about how it works.
+ * We introduce a config file that statically configures all cycles to watch for
+   arbitrage opportunities. The config file is parsed and injected into the
+   banking stage when MEV is enabled.
+ * In `BankingStage::process_and_record_transactions`, we introduce an
+   additional output: a single optional transaction, that should extract the MEV
+   created by the transaction batch.
+ * At the call site, `BankingStage::process_transactions`, if an MEV transaction
+   was produced, we execute it.
+ * `runtime/src/mev.rs` and `arbitrage.rs` contain methods that given a set of
+   AMM pools, compute optimal input amount that maximizes profit. When the
+   profit is smaller than the transaction fee, or even negative, we bail out.
 
 ## Comparison to alternatives
 
