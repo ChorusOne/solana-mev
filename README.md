@@ -61,8 +61,6 @@ arbitrage transactions, i.e. acting in between the user's transactions.
 Our strategy for arbitraging is checking for every
 [configured](#configuration) path that start and finish at the same token if
 there could be a transaction that generates profit.
-This is done by multiplying the pool's balance ratios and checking that the equation is greater than
-one: $\prod{p_{x+1}/p_x} > 1$, e.g., for a path $A \rightarrow B  \rightarrow C  \rightarrow A $
 
 Solana transactions are organized in batches called **Entries** that can execute
 in parallel. Accounts in these entries can be referenced only once for
