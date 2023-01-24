@@ -37,19 +37,7 @@ architectures on Solana to ensure that MEV benefits the entire community.
 
 ## Details
 
- * We introduce a config file that statically configures all cycles to watch for
-   arbitrage opportunities. The config file is parsed and injected into the
-   banking stage when MEV is enabled.
- * In `BankingStage::process_and_record_transactions`, we introduce an
-   additional output: a single optional transaction, that should extract the MEV
-   created by the transaction batch.
- * At the call site, `BankingStage::process_transactions`, if an MEV transaction
-   was produced, we execute it.
- * `runtime/src/mev.rs` and `arbitrage.rs` contain methods that given a set of
-   AMM pools, compute optimal input amount that maximizes profit. When the
-   profit is smaller than the transaction fee, or even negative, we bail out.
-
-We are interested making arbitrages on Automated Market Maker (AMM) pools.  When
+We are interested making arbitrages on Automated Market Maker (AMM) pools. When
 we are a validator during block production, we look at every transaction to see
 if the program id is one of the [configured](#configuration) known program ids.
 If a transaction interacts with a known program id, we get all pools balances
@@ -62,6 +50,18 @@ Our strategy for arbitraging is checking for every
 [configured](#configuration) path that start and finish at the same token if
 there could be a transaction that generates profit.
 
+* We introduce a config file that statically configures all cycles to watch for
+   arbitrage opportunities. The config file is parsed and injected into the
+   banking stage when MEV is enabled.
+ * In `BankingStage::process_and_record_transactions`, we introduce an
+   additional output: a single optional transaction, that should extract the MEV
+   created by the transaction batch.
+ * At the call site, `BankingStage::process_transactions`, if an MEV transaction
+   was produced, we execute it.
+ * `runtime/src/mev.rs` and `arbitrage.rs` contain methods that given a set of
+   AMM pools, compute optimal input amount that maximizes profit. When the
+   profit is smaller than the transaction fee, or even negative, we bail out.
+
 Solana transactions are organized in batches called **Entries** that can execute
 in parallel. Accounts in these entries can be referenced only once for
 write-access and multiple times for read-access. Due to this fact, when we
@@ -71,8 +71,8 @@ that resulted in the arbitrage, but it might happen that the arbitrage
 transactions are not executed atomically after we spotted the arbitrage, see
 more details in the following [limitations](#limitations) section.
 
-
 ## Limitations
+
 We have some limitations when executing arbitrage transactions. The main one is
 that we don't lock accounts in-between entries and it might happen that a worker
 thread executes other entries in-between the entry produced for arbitrage, this
@@ -86,7 +86,6 @@ We are limited to a maximum of three instructions per transaction, this is due
 to Solana's limitations on the transaction's length, one could extend an
 arbitrage to spawn over multiple sequential transactions to circumvent the
 limitation.
-
 
 ## Comparison to alternatives
 
