@@ -480,12 +480,46 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
 name = "borsh"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b42b13fa9bf62be34702e5ee4526aff22530ae22fe34a0c4290d30d5e4e782e6"
+dependencies = [
+ "borsh-derive 0.7.2",
+]
+
+[[package]]
+name = "borsh"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15bf3650200d8bffa99015595e10f1fbd17de07abbc25bb067da79e769939bfa"
 dependencies = [
- "borsh-derive",
+ "borsh-derive 0.9.3",
  "hashbrown",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6aaa45f8eec26e4bf71e7e5492cf53a91591af8f871f422d550e7cc43f6b927"
+dependencies = [
+ "borsh-derive-internal 0.7.2",
+ "borsh-schema-derive-internal 0.7.2",
+ "proc-macro2 1.0.32",
+ "syn 1.0.91",
+]
+
+[[package]]
+name = "borsh-derive"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "307f3740906bac2c118a8122fe22681232b244f1369273e45f1156b45c43d2dd"
+dependencies = [
+ "borsh-derive-internal 0.8.2",
+ "borsh-schema-derive-internal 0.8.2",
+ "proc-macro-crate 0.1.5",
+ "proc-macro2 1.0.32",
+ "syn 1.0.91",
 ]
 
 [[package]]
@@ -494,10 +528,32 @@ version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6441c552f230375d18e3cc377677914d2ca2b0d36e52129fe15450a2dce46775"
 dependencies = [
- "borsh-derive-internal",
- "borsh-schema-derive-internal",
+ "borsh-derive-internal 0.9.3",
+ "borsh-schema-derive-internal 0.9.3",
  "proc-macro-crate 0.1.5",
  "proc-macro2 1.0.32",
+ "syn 1.0.91",
+]
+
+[[package]]
+name = "borsh-derive-internal"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61621b9d3cca65cc54e2583db84ef912d59ae60d2f04ba61bc0d7fc57556bda2"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.91",
+]
+
+[[package]]
+name = "borsh-derive-internal"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2104c73179359431cc98e016998f2f23bc7a05bc53e79741bcba705f30047bc"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
  "syn 1.0.91",
 ]
 
@@ -506,6 +562,28 @@ name = "borsh-derive-internal"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5449c28a7b352f2d1e592a8a28bf139bc71afb0764a14f3c02500935d8c44065"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.91",
+]
+
+[[package]]
+name = "borsh-schema-derive-internal"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85b38abfda570837b0949c2c7ebd31417e15607861c23eacb2f668c69f6f3bf7"
+dependencies = [
+ "proc-macro2 1.0.32",
+ "quote 1.0.10",
+ "syn 1.0.91",
+]
+
+[[package]]
+name = "borsh-schema-derive-internal"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae29eb8418fcd46f723f8691a2ac06857d31179d33d2f2d91eb13967de97c728"
 dependencies = [
  "proc-macro2 1.0.32",
  "quote 1.0.10",
@@ -4007,6 +4085,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
+name = "rustc-hex"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e75f6a532d0fd9f7f13144f392b6ad56a32696bfcd9c78f797f16bbb6f072d6"
+
+[[package]]
 name = "rustc_version"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4443,9 +4527,9 @@ dependencies = [
 
 [[package]]
 name = "sha3"
-version = "0.10.1"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "881bf8156c87b6301fc5ca6b27f11eeb2761224c7081e69b409d5a1951a70c86"
+checksum = "eaedf34ed289ea47c2b741bb72e5357a209512d67bcd4bda44359e5bf0470f56"
 dependencies = [
  "digest 0.10.3",
  "keccak",
@@ -4680,7 +4764,7 @@ dependencies = [
 name = "solana-banks-client"
 version = "1.13.5"
 dependencies = [
- "borsh",
+ "borsh 0.9.3",
  "futures 0.3.21",
  "solana-banks-interface",
  "solana-banks-server",
@@ -5733,8 +5817,8 @@ dependencies = [
  "bincode",
  "bitflags",
  "blake3",
- "borsh",
- "borsh-derive",
+ "borsh 0.9.3",
+ "borsh-derive 0.9.3",
  "bs58",
  "bv",
  "bytemuck",
@@ -5757,7 +5841,7 @@ dependencies = [
  "serde_bytes",
  "serde_derive",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.10.33",
  "solana-frozen-abi-macro 1.10.33",
  "solana-sdk-macro 1.10.33",
@@ -5775,8 +5859,8 @@ dependencies = [
  "bincode",
  "bitflags",
  "blake3",
- "borsh",
- "borsh-derive",
+ "borsh 0.9.3",
+ "borsh-derive 0.9.3",
  "bs58",
  "bv",
  "bytemuck",
@@ -5800,7 +5884,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.13.5",
  "solana-frozen-abi-macro 1.13.5",
  "solana-logger 1.13.5",
@@ -6043,6 +6127,7 @@ dependencies = [
  "rustc_version 0.4.0",
  "serde",
  "serde_derive",
+ "serde_json",
  "solana-address-lookup-table-program",
  "solana-bucket-map",
  "solana-compute-budget-program",
@@ -6059,12 +6144,15 @@ dependencies = [
  "solana-vote-program",
  "solana-zk-token-proof-program",
  "solana-zk-token-sdk 1.13.5",
+ "spl-token",
+ "spl-token-swap",
  "strum",
  "strum_macros",
  "symlink",
  "tar",
  "tempfile",
  "thiserror",
+ "toml",
  "zstd",
 ]
 
@@ -6078,7 +6166,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bitflags",
- "borsh",
+ "borsh 0.9.3",
  "bs58",
  "bytemuck",
  "byteorder",
@@ -6108,7 +6196,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.10.33",
  "solana-frozen-abi-macro 1.10.33",
  "solana-logger 1.10.33",
@@ -6128,7 +6216,7 @@ dependencies = [
  "base64 0.13.0",
  "bincode",
  "bitflags",
- "borsh",
+ "borsh 0.9.3",
  "bs58",
  "bytemuck",
  "byteorder",
@@ -6159,7 +6247,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.4",
  "solana-frozen-abi 1.13.5",
  "solana-frozen-abi-macro 1.13.5",
  "solana-logger 1.13.5",
@@ -6434,7 +6522,7 @@ dependencies = [
  "Inflector",
  "base64 0.13.0",
  "bincode",
- "borsh",
+ "borsh 0.9.3",
  "bs58",
  "lazy_static",
  "log",
@@ -6628,7 +6716,7 @@ dependencies = [
  "rand 0.7.3",
  "serde",
  "serde_json",
- "sha3 0.9.1",
+ "sha3 0.10.4",
  "solana-program 1.13.5",
  "solana-sdk 1.13.5",
  "subtle",
@@ -6684,13 +6772,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16a33ecc83137583902c3e13c02f34151c8b2f2b74120f9c2b3ff841953e083d"
 dependencies = [
  "assert_matches",
- "borsh",
+ "borsh 0.9.3",
  "num-derive",
  "num-traits",
  "solana-program 1.10.33",
  "spl-token",
  "spl-token-2022",
  "thiserror",
+]
+
+[[package]]
+name = "spl-math"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ecdd22720b9e5ab578a862928f5010ca197419502bdace600ccd5d23dae9352"
+dependencies = [
+ "borsh 0.7.2",
+ "borsh-derive 0.8.2",
+ "num-derive",
+ "num-traits",
+ "solana-program 1.10.33",
+ "thiserror",
+ "uint",
 ]
 
 [[package]]
@@ -6731,6 +6834,22 @@ dependencies = [
  "solana-program 1.10.33",
  "solana-zk-token-sdk 1.10.33",
  "spl-memo",
+ "spl-token",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token-swap"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b803000d1167393ab203c98ed0d995367bda2ef1f12213598e126bd70a12c4c"
+dependencies = [
+ "arrayref",
+ "enum_dispatch",
+ "num-derive",
+ "num-traits",
+ "solana-program 1.10.33",
+ "spl-math",
  "spl-token",
  "thiserror",
 ]
@@ -7349,9 +7468,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.5.8"
+version = "0.5.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a31142970826733df8241ef35dc040ef98c679ab14d7c3e54d827099b3acecaa"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
 dependencies = [
  "serde",
 ]
@@ -7609,6 +7728,18 @@ name = "ucd-trie"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56dee185309b50d1f11bfedef0fe6d036842e3fb77413abef29f8f8d1c5d4c1c"
+
+[[package]]
+name = "uint"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9db035e67dfaf7edd9aebfe8676afcd63eed53c8a4044fed514c8cccf1835177"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "rustc-hex",
+ "static_assertions",
+]
 
 [[package]]
 name = "unicase"
