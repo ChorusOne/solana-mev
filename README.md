@@ -16,11 +16,16 @@ drop-in replacement for the upstream validator.
 
  * [Decentralizing MEV: An Alternative to Block-Building Marketplaces][talk],
    a talk by Thalita Franklin at Breakpoint 2022.
- * TODO: Add link to whitepaper.
- * [Arbitrage as a Convex optimization problem][notion_page], a document by Umberto Natale describing the mathematical framework used to detect if an abritrage exists.
+ * [Breaking Bots: MEV on Solana and how to prevent frontrunning, spam attacks
+   and centralization][breaking-bots], whitepaper by Thalita Franklin, Enrique
+   Fynn, Umberto Natale, and Ruud van Asseldonk.
+ * [Arbitrage as a Convex optimization problem][notion_page], a document by
+   Umberto Natale describing the mathematical framework used to detect if an
+   arbitrage exists.
 
 [talk]: https://www.youtube.com/watch?v=nTEnpuDHz3w&t=6198s
 [notion_page]: https://www.notion.so/chorusone/Arbitrage-as-a-Convex-optimization-problem-f2490665033f41b6b6d41cfd5196acae
+[breaking-bots]: https://chorus.one/products/breaking-bots/
 
 ## Status
 
