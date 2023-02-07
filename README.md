@@ -88,6 +88,8 @@ defining all *minimum_output* of the arbitrage instructions (except the first)
 as the input of the previous instruction. As an extra guarantee that the
 transaction produces a profitable transaction, we check that the transaction is
 profitable. Transactions that execute but fail are not included in the block.
+Note, it is possible to lift this limitation, but the changes with respect to
+the upstream validator would become more invasive than our current patches.
 
 We are limited to a maximum of three instructions per transaction, this is due
 to Solana's limitations on the transaction's length, one could extend an
