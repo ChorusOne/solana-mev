@@ -25,9 +25,9 @@ jobs:
         id: check
         run: |
           source ci/env.sh
-          echo "::set-output name=tag::$CI_TAG"
+          echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
           eval "$(ci/channel-info.sh)"
-          echo "::set-output name=channel::$CHANNEL"
+          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
 
       - name: Get specific changed files
         id: changed-files-specific
