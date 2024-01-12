@@ -43,7 +43,7 @@ jobs:
           echo "tag: ${{ steps.check.outputs.tag }}"
           echo "channel: ${{ steps.check.outputs.channel }}"
           echo "any changes: ${{ steps.changed-files-specific.outputs.any_changed }}"
-          echo "::set-output name=need_to_build::${{
+          echo "need_to_build=${{
             steps.check.outputs.tag != ''
             ||
             (
@@ -51,7 +51,7 @@ jobs:
               &&
               steps.changed-files-specific.outputs.any_changed != ''
             )
-          }}"
+          }}" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Setup Node
