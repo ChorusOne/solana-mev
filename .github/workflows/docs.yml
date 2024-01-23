@@ -25,9 +25,9 @@ jobs:
         id: check
         run: |
           source ci/env.sh
-          echo "tag=$CI_TAG" >> $GITHUB_OUTPUT
+          echo "tag=$CI_TAG" >> "$GITHUB_OUTPUT"
           eval "$(ci/channel-info.sh)"
-          echo "channel=$CHANNEL" >> $GITHUB_OUTPUT
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
 
       - name: Get specific changed files
         id: changed-files-specific
@@ -51,7 +51,7 @@ jobs:
               &&
               steps.changed-files-specific.outputs.any_changed != ''
             )
-          }}" >> $GITHUB_OUTPUT
+          }}" >> "$GITHUB_OUTPUT"
         shell: bash
 
       - name: Setup Node
